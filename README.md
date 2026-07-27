@@ -54,6 +54,16 @@ cp .env.example .env      # then edit .env and set ANTHROPIC_API_KEY
 `--offline` command** — that is deliberate, and it is what makes the
 clean-environment requirement verifiable.
 
+Verified from a clean checkout (`git archive` of HEAD into an empty directory, fresh
+venv, install from `requirements.txt` only): 313 tests pass with no API key, and pass
+from a different working directory; the CLI, the `triage` entry point, batch mode, and
+the schema generator all work.
+
+> **Windows note.** Installing into a deeply nested directory can fail with
+> `OSError: [Errno 2] No such file or directory` on one of the Anthropic SDK's
+> long filenames — that is the 260-character `MAX_PATH` limit, not a packaging fault.
+> Use a shorter path (e.g. `C:\projects\TicketPilot`) or enable long-path support.
+
 ---
 
 ## Running it
@@ -311,28 +321,32 @@ the reported evaluation.
    the summary is not checked at all, though §3 requires it to be factual. A-006 shows
    an unsupported detail ("committed" where the ticket says "uploaded") surviving
    alongside 100% exact evidence.
-3. **Flag precision and action relevance are not measured.** The flag metric is
-   inclusion-only; action grounding is guaranteed by construction while relevance is
-   not, and 6 of 20 cases show redundant or irrelevant steps.
-4. **A plausible-but-wrong classification passes every check.** Category accuracy was
+3. **Flag precision, action relevance, and summary factuality are measured only by
+   hand.** A manual review of all 20 outputs found action text context-insensitive in
+   6 cases, 2 unjustified flags, and 1 unsupported summary detail. No code computes
+   these, so they will not be recomputed on a future run.
+4. **A flag false positive becomes a review false positive.** The escalate-only rule
+   is correct but amplifies flag errors — the single review error is downstream of an
+   unjustified `MISSING_INFO` on A-001, not independent of it.
+5. **A plausible-but-wrong classification passes every check.** Category accuracy was
    100% for *both* arms, so nothing measured here distinguishes a right category from a
    wrong one. Largest residual risk, and the reason `SECURITY` and P0/P1 force review
    unconditionally.
-5. **Accuracy and stability were measured on only 20 cases and three stability
+6. **Accuracy and stability were measured on only 20 cases and three stability
    tickets, and tier invariance on a single pair. The results are indicative, not
    statistically conclusive.**
-6. **The injection detector is evadable.** A test asserts an unlisted paraphrase slips
+7. **The injection detector is evadable.** A test asserts an unlisted paraphrase slips
    through. Containment rests on the deterministic layer, not detection.
-7. **The confidence threshold is inert at 0.75.** No case in the live run was reviewed
+8. **The confidence threshold is inert at 0.75.** No case in the live run was reviewed
    solely on confidence, so it could be raised substantially or dropped to zero without
    changing an outcome. Choosing it from data needs cases where confidence decides,
    which this set lacks.
-8. **One repair attempt is a reasoned assumption.** Schema-constrained output needed
+9. **One repair attempt is a reasoned assumption.** Schema-constrained output needed
    almost no repairs, so it remains largely untested.
-9. **`supports` is unvalidated** — the assignment defines no vocabulary for it.
-10. **Hebrew detector coverage is thinner than English.** A Hebrew paraphrase is more
+10. **`supports` is unvalidated** — the assignment defines no vocabulary for it.
+11. **Hebrew detector coverage is thinner than English.** A Hebrew paraphrase is more
     likely to evade the Layer-2 detector.
-11. **Three safeguards were never exercised by the real model.** The `ticket_id`
+12. **Three safeguards were never exercised by the real model.** The `ticket_id`
     protection, KB-ID allowlist, and evidence check all measured 0 → 0 in the live run.
     Their measured value comes from the adversarial tests, so the live sample alone
     cannot justify their complexity.
@@ -354,3 +368,7 @@ the reported evaluation.
    phrasings.
 7. **An HTTP surface** if this became a service; the pipeline is already a pure
    function of (ticket, kb, provider, settings).
+
+## Time spent
+
+Approximately 4 hours.

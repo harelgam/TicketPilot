@@ -22,9 +22,9 @@ plus 3 repeats on 3 stability tickets. 51 provider calls, $1.09 at list price.
 | Stability, decision fields (3×3) | 66.7% | **100%** |
 | Tier invariance (1 pair) | failed | passed |
 | Action grounding | 100% | 100% |
-| Action contextual relevance | not measured | not measured — issues found manually |
-| Flag precision / exactness | not measured | not measured — false positives found manually |
-| Summary factual accuracy | not measured | not measured — one issue found manually |
+| Action contextual relevance | not automated | **14/20** by manual review |
+| Flag justification (extras) | not automated | **4/6 extras defensible**, 2 unjustified |
+| Summary factual accuracy | not automated | **19/20** clear by manual review |
 | Provider failures | 0 | 0 |
 | Crashes | 0 | 0 |
 
@@ -35,17 +35,17 @@ Artifacts: `artifacts/live-evaluation/{baseline,final}/`. Reproduce with
 accuracy, required-flag recall, self-consistency, and stability. It loses on
 review accuracy (one over-escalation) and forbidden-priority violations (one case
 where the baseline was right and it was wrong). The rows marked *not measured* are
-where a manual review found real problems the automated scorer cannot see; those are
-detailed below and are the most important part of this report.
+where the automated scorer cannot see the problem at all; a manual review of all 20
+final-arm outputs supplied those figures, and that review is the most important part of
+this report.
 
 ### How to read three of these rows
 
 *Required flags present* is an **inclusion** metric: it checks that every required
 flag is present and does **not** penalise additional flags, because the expected
 lists specify minimum required sets rather than exhaustive ones. So 93.3% inclusion
-is not 93.3% flag accuracy. The adjacent row counts cases with extra flags — 6 in
-the final arm — and manual review found at least one of those to be a false positive
-(A-012, below).
+is not 93.3% flag accuracy. The two rows beneath it supply what inclusion omits: 6
+cases carried extra flags, of which manual review judged 2 unjustified.
 
 *Category accuracy is 100% for both arms*, so nothing in this run distinguished a
 correct category from an incorrect one.
@@ -106,29 +106,54 @@ So the A8 trade-off is a genuine wash rather than a win: assembled text is alway
 grounded and sometimes irrelevant; model-written text is contextual and sometimes
 fabricated.
 
-### 3. Over-flagging, and an unsupported detail in a summary
+### 3. Flag justification: 4 of 6 extras defensible, 2 not
 
-**A-012 over-flagging.** The ticket states production, single tenant, all users
-blocked, SSO, no local passwords, no workaround, nobody can work. The final version
-still returned `MISSING_INFO` and added KB-TRIAGE-01. There is enough information to
-decide AUTH/P1 confidently, so this is a false-positive flag that the inclusion
-metric cannot detect.
+All 20 final-arm decisions were reviewed by hand. Six carried flags beyond the
+expected minimum, which the inclusion metric does not penalise:
 
-**A-006 summary adds a fact.** The ticket says the developer *uploaded* (העלה) a file.
-Both arms' summaries say *"accidentally committed a file"*. Committing is a plausible
-route to GitHub but is not stated. *"uploaded a file"* or *"exposed a file in a public
-GitHub repository"* would be supported.
+| Case | Extra flag | Judgement |
+| --- | --- | --- |
+| A-005 | MISSING_INFO | Defensible — the ticket contradicts itself, so the true state is unknown |
+| A-007 | MISSING_INFO | Defensible — KB-EXPORT-01 asks for export ID and start time; absent |
+| A-010 | MISSING_INFO | Defensible — export ID and environment absent |
+| A-011 | NO_KB_SUPPORT | Correct — no supplied article covers blanket HTTP 500 on all API calls |
+| A-001 | MISSING_INFO | **Not justified** — AUTH/P2 is determinable; SSO-versus-password is needed for handling, not triage |
+| A-012 | MISSING_INFO | **Not justified** — the ticket states production, single tenant, all users, SSO, no local passwords, no workaround |
+
+**A-001 shows that flag precision and review precision are the same problem.** Its
+unjustified `MISSING_INFO` is what forced the review escalation counted against the
+final version. The escalate-only rule is correct — every allowed flag does warrant
+review — but it therefore *amplifies* a flag false positive into a review false
+positive. The single review error in the results table is downstream of a flag error,
+not independent of it. That makes flag precision more important than treating it as a
+secondary metric implies.
+
+### 4. Summary factual accuracy: 19 of 20 clear
+
+All 20 final-arm summaries were compared against their ticket text.
+
+One clear unsupported detail: **A-006** says the developer *"accidentally committed a
+file"* where the ticket says *uploaded* (העלה). Committing is a plausible route to
+GitHub but is not stated; *"uploaded"* or *"exposed a file in a public GitHub
+repository"* would be supported. Both arms made this error, so it is a model
+tendency rather than a final-version one.
+
+Two borderline: **T-001** renders "seven customer tenants … on production login" as
+"seven **production** tenants", re-attaching the adjective; **A-001** adds the
+inference "indicating an account-specific issue rather than an outage", which is
+reasonable analysis but not stated.
 
 This exposes a hole: **the summary is not validated at all.** Evidence quotes are
 checked character-for-character, but §3 also requires the summary to be factual and
 not invent facts, and nothing in the pipeline checks it. Evidence grounding at 100%
-and summary factuality are independent properties, and only one of them is measured.
+and summary factuality are independent properties; a deterministic check cannot
+catch a substituted verb like "committed", so closing this needs an entailment check.
 
 ---
 
 ## Findings from the automated metrics
 
-### 1. Self-consistency: 5 → 0
+### 1. Self-consistency: 5 -> 0
 
 The baseline returned at least one flag alongside `needs_human_review: false` in 5 of
 20 cases. Every allowed flag names a condition warranting review, so those decisions
