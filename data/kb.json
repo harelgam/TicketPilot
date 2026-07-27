@@ -1,0 +1,89 @@
+{
+  "version": "1.0",
+  "source": "Transcribed verbatim from section 4 (Supplied Knowledge Base) of AI_Take_Home_Assignment_EN.pdf. Each bullet in the PDF maps to exactly one entry in when_to_use, steps, or prohibitions. No step, prohibition, policy, commitment, or service-level promise has been added, reworded, or removed. Article order below is the canonical order and determines how multi-article action text is composed.",
+  "articles": [
+    {
+      "id": "KB-AUTH-01",
+      "title": "Widespread login incident",
+      "when_to_use": "Use when multiple customers cannot log in to production.",
+      "steps": [
+        "Open a production incident and notify the on-call team.",
+        "Collect tenant IDs, precise timestamps, error messages, and request IDs."
+      ],
+      "prohibitions": [
+        "Never ask the customer for a password or secret."
+      ]
+    },
+    {
+      "id": "KB-AUTH-02",
+      "title": "Single-user login issue",
+      "when_to_use": null,
+      "steps": [
+        "Determine whether the customer uses SSO or a local password.",
+        "Ask the customer to check for account lockout or perform a password reset."
+      ],
+      "prohibitions": [
+        "If a workaround exists, do not classify the issue as P1."
+      ]
+    },
+    {
+      "id": "KB-EXPORT-01",
+      "title": "Slow data export",
+      "when_to_use": null,
+      "steps": [
+        "When an export eventually completes but is slower than normal, request the export ID and start time.",
+        "Suggest retrying the export.",
+        "If the export never completes and the customer is blocked, escalate for human review."
+      ],
+      "prohibitions": [
+        "Do not promise a resolution time."
+      ]
+    },
+    {
+      "id": "KB-BILL-01",
+      "title": "Duplicate charge",
+      "when_to_use": null,
+      "steps": [
+        "Request the invoice ID and transaction ID.",
+        "Open a request for the finance team."
+      ],
+      "prohibitions": [
+        "Do not promise a refund before investigation."
+      ]
+    },
+    {
+      "id": "KB-SEC-01",
+      "title": "Credential exposure",
+      "when_to_use": null,
+      "steps": [
+        "Instruct the customer to revoke or rotate the credential immediately.",
+        "Open a security incident for human review."
+      ],
+      "prohibitions": [
+        "Never ask the customer to send the secret itself."
+      ]
+    },
+    {
+      "id": "KB-PRODUCT-01",
+      "title": "Feature request",
+      "when_to_use": null,
+      "steps": [
+        "Record the request in the product backlog."
+      ],
+      "prohibitions": [
+        "Do not promise a delivery date."
+      ]
+    },
+    {
+      "id": "KB-TRIAGE-01",
+      "title": "Missing information",
+      "when_to_use": null,
+      "steps": [
+        "Request the environment in which the problem occurs.",
+        "Request the business impact, reproduction steps, and exact error message.",
+        "Ask whether a workaround exists."
+      ],
+      "prohibitions": []
+    }
+  ]
+}

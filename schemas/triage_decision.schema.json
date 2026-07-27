@@ -1,0 +1,148 @@
+{
+  "$defs": {
+    "Category": {
+      "description": "Allowed category values (assignment section 3).",
+      "enum": [
+        "AUTH",
+        "BILLING",
+        "DATA_EXPORT",
+        "SECURITY",
+        "BUG",
+        "FEATURE",
+        "OTHER",
+        "UNKNOWN"
+      ],
+      "title": "Category",
+      "type": "string"
+    },
+    "EvidenceItem": {
+      "additionalProperties": false,
+      "description": "A quote from the ticket plus what it supports.\n\n``quote`` must be an exact substring of the original ticket text; that is\nenforced in ``validation.py``, not here, because Pydantic has no access to\nthe source ticket.\n\n``supports`` is intentionally unconstrained. The assignment illustrates\n``[\"category\", \"priority\"]`` but never defines a closed vocabulary for it,\nso constraining it would invent a requirement — and would spend repair\ncalls rejecting values that are not actually invalid. Only the quote is\nvalidated, which is what section 3 requires.",
+      "properties": {
+        "quote": {
+          "minLength": 1,
+          "title": "Quote",
+          "type": "string"
+        },
+        "supports": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Supports",
+          "type": "array"
+        }
+      },
+      "required": [
+        "quote",
+        "supports"
+      ],
+      "title": "EvidenceItem",
+      "type": "object"
+    },
+    "Flag": {
+      "description": "Allowed safety/quality flags (assignment section 3).\n\nThis set is closed and contains no member meaning \"the model or the\nprovider failed\". That absence is load-bearing: on such a failure the\nsystem emits an empty flag list rather than borrowing a flag that would\nassert something untrue about the ticket or the knowledge base. See\n``review.py`` for the provenance rules.",
+      "enum": [
+        "PROMPT_INJECTION",
+        "MISSING_INFO",
+        "NO_KB_SUPPORT",
+        "CONFLICTING_SIGNALS"
+      ],
+      "title": "Flag",
+      "type": "string"
+    },
+    "Priority": {
+      "description": "Allowed priority values (assignment section 3).",
+      "enum": [
+        "P0",
+        "P1",
+        "P2",
+        "P3",
+        "UNKNOWN"
+      ],
+      "title": "Priority",
+      "type": "string"
+    },
+    "RecommendedAction": {
+      "additionalProperties": false,
+      "description": "Action text plus KB IDs.\n\nBoth fields are produced by the application: ``kb_ids`` is the model's\nproposal after allowlist filtering, and ``text`` is assembled from those\nvalidated articles by ``actions.build_from_kb``. The model never authors\nthis text (A8).",
+      "properties": {
+        "kb_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Kb Ids",
+          "type": "array"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "RecommendedAction",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The nine-field response contract (assignment section 3).\n\nField order matches the assignment's example output so that a serialised\ndecision is directly comparable to the contract. Exactly these nine\nfields are emitted — diagnostics live in a separate run record (A2).",
+  "properties": {
+    "category": {
+      "$ref": "#/$defs/Category"
+    },
+    "confidence": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/EvidenceItem"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "flags": {
+      "items": {
+        "$ref": "#/$defs/Flag"
+      },
+      "title": "Flags",
+      "type": "array"
+    },
+    "needs_human_review": {
+      "title": "Needs Human Review",
+      "type": "boolean"
+    },
+    "priority": {
+      "$ref": "#/$defs/Priority"
+    },
+    "recommended_action": {
+      "$ref": "#/$defs/RecommendedAction"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    },
+    "ticket_id": {
+      "title": "Ticket Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ticket_id",
+    "category",
+    "priority",
+    "summary",
+    "evidence",
+    "recommended_action",
+    "confidence",
+    "needs_human_review",
+    "flags"
+  ],
+  "title": "TriageDecision",
+  "type": "object"
+}
