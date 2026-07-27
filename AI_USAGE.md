@@ -76,7 +76,12 @@ Smaller rejection: NFC-normalising evidence quotes before the substring check, t
 lenient about the Hebrew ticket. Section 3 says "exact substring"; normalising first
 weakens it. Kept strict, with the normalisation result recorded as a diagnostic.
 
-## Bugs found by testing rather than review
+## Bugs found by testing, and bugs found by review
+
+The assignment asks for one bug found by testing rather than by trusting generated
+code. The first two below are that. The rest are here because the honest split matters:
+the defects that mattered most were found by *reading* code and artifacts, and several
+of them were pointed out to me rather than found by me.
 
 **Injection false positive.** The generated `act_as` pattern
 
@@ -131,6 +136,55 @@ by tests:
   so incomplete output was indistinguishable from complete output with nothing to
   report and skipped the repair it should have earned. Every existing test passed
   because they all supplied complete payloads.
+
+**Three metrics and one documented command that did not do what they claimed.** The
+worst class of defect here, because each one *reported success*:
+
+- **A documented command was broken.** `scripts/verify_live.py` is the one-call
+  integration check named in the README. Splitting the canary into its own system
+  block added `system_suffix` to the provider protocol and to both providers, but not
+  to the `CallCappedProvider` wrapper inside that script. It died with a `TypeError`
+  before making any API call. Nothing caught it because the script is the only code
+  path that wrapper has, and no test exercised it. There is now a test that asserts
+  the wrapper's signature accepts every protocol parameter and forwards each one.
+- **`triage()` documented "never raises" and did not.** The bug above propagated
+  straight out of the pipeline, because provider calls were unwrapped — the guarantee
+  rested on every provider implementation being correct. Provider calls now go through
+  a boundary that converts any exception into a provider-failure result, so the
+  docstring is true of a non-conforming provider too.
+- **"Schema validity" did not validate the schema.** The scorer checked that nine field
+  names were present and that three enums held legal values. A decision with
+  `ticket_id: 123`, `summary: []` and `confidence: 99` scored as valid — I reproduced
+  that before changing anything. It now calls `TriageDecision.model_validate` and
+  reports closed-vocabulary validity as a separate row, because a type error and an
+  invented enum value are different defects. Writing that test also exposed a real gap:
+  `TriageDecision` had no `min_length` on `ticket_id` or `summary`, so the *emitted*
+  contract was laxer than what the model is asked to produce.
+- **`expected_kb_ids_include` was loaded from the case file and never read.** So a
+  legitimate KB article selected for the wrong situation passed every check — the
+  allowlist only rejects invented IDs. Implementing the check, plus a `must_not_kb_ids`
+  counterpart, immediately caught A-012 selecting the credential-compromise article for
+  an ordinary lockout: a problem previously visible only by reading the output.
+
+**A stored score that went stale, and artifacts to match.** Run records embedded the
+score alongside the decision. After A-006's expected label was corrected,
+`metrics.json` said the verdict was wrong while the record beside it still said
+"correct". A score is a derivative of the decision plus the current expectations, so it
+is no longer stored at all; `scripts/rescore.py` recomputes it. Removing it then broke
+the change report the other way: with nothing to compare against, every field of every
+case read as `None -> True`, so `verdict_changes` listed about a hundred entries
+implying a hundred moved verdicts when three had moved. A comparison without a baseline
+now reports nothing and states that it could not run. The offline adversarial
+artifacts were regenerated from the current commit for the same reason — they had been
+produced before a mock fixture bug was fixed.
+
+**A test fixture that made the baseline look worse than it is.** The mock emitted the
+union of both output shapes. Its top-level `kb_ids` is required by `ModelTriageOutput`
+and forbidden by `TriageDecision`, so every offline *baseline* decision scored as a
+contract violation for a field the baseline is never asked to produce. The mock now
+emits the shape each mode actually requests. Worth stating plainly: this fixture bug
+was inflating a number in my own favour, and it was found by review rather than by a
+test.
 
 **A declared dependency that was never called.** `python-dotenv` was in
 `requirements.txt` and `pyproject.toml`, and nothing called `load_dotenv()`. A key

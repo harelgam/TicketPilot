@@ -124,10 +124,12 @@
       "$ref": "#/$defs/RecommendedAction"
     },
     "summary": {
+      "minLength": 1,
       "title": "Summary",
       "type": "string"
     },
     "ticket_id": {
+      "minLength": 1,
       "title": "Ticket Id",
       "type": "string"
     }

@@ -99,26 +99,47 @@ def runs_dir() -> Path:
     return Path(override) if override else repo_root() / "runs"
 
 
-def _env_float(name: str, default: float) -> float:
+def _env_float(
+    name: str, default: float, *, minimum: float | None = None, maximum: float | None = None
+) -> float:
+    """Read a float override, falling back to the default when unusable.
+
+    Out-of-range values fall back rather than being clamped: a threshold of 7 or a
+    timeout of 0 is a configuration mistake, and silently clamping it to 1.0 or to
+    some floor would hide the mistake behind plausible behaviour. A malformed or
+    out-of-range override never crashes startup; the effective value is recorded in
+    every run record, so what actually applied is always visible.
+    """
     raw = os.environ.get(name, "").strip()
     if not raw:
         return default
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError:
-        # A malformed override falls back to the default rather than crashing
-        # the service on startup; the effective value is recorded per run.
         return default
+    if minimum is not None and value < minimum:
+        return default
+    if maximum is not None and value > maximum:
+        return default
+    return value
 
 
-def _env_int(name: str, default: int) -> int:
+def _env_int(
+    name: str, default: int, *, minimum: int | None = None, maximum: int | None = None
+) -> int:
+    """Read an int override. Same fall-back-not-clamp policy as ``_env_float``."""
     raw = os.environ.get(name, "").strip()
     if not raw:
         return default
     try:
-        return int(raw)
+        value = int(raw)
     except ValueError:
         return default
+    if minimum is not None and value < minimum:
+        return default
+    if maximum is not None and value > maximum:
+        return default
+    return value
 
 
 @dataclass(frozen=True)
@@ -142,9 +163,18 @@ class Settings:
             provider=os.environ.get("TICKETPILOT_PROVIDER", "anthropic").strip() or "anthropic",
             model=os.environ.get("ANTHROPIC_MODEL", "").strip() or DEFAULT_MODEL,
             effort=os.environ.get("TICKETPILOT_EFFORT", "").strip() or DEFAULT_EFFORT,
-            max_tokens=_env_int("TICKETPILOT_MAX_TOKENS", DEFAULT_MAX_TOKENS),
-            timeout_seconds=_env_float("TICKETPILOT_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS),
+            # Bounds so a typo cannot produce a nonsensical runtime: a negative
+            # max_tokens, a zero timeout, or a confidence threshold of 7 (which
+            # would force review on every ticket and make the metric meaningless).
+            max_tokens=_env_int(
+                "TICKETPILOT_MAX_TOKENS", DEFAULT_MAX_TOKENS, minimum=256, maximum=128_000
+            ),
+            timeout_seconds=_env_float(
+                "TICKETPILOT_TIMEOUT_SECONDS", DEFAULT_TIMEOUT_SECONDS,
+                minimum=1.0, maximum=600.0,
+            ),
             confidence_threshold=_env_float(
-                "TICKETPILOT_CONFIDENCE_THRESHOLD", DEFAULT_CONFIDENCE_THRESHOLD
+                "TICKETPILOT_CONFIDENCE_THRESHOLD", DEFAULT_CONFIDENCE_THRESHOLD,
+                minimum=0.0, maximum=1.0,
             ),
         )

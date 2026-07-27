@@ -17,7 +17,9 @@ from typing import Any
 
 from .config import data_dir
 from .kb import KnowledgeBase
-from .models import TicketInput
+from .models import TicketInput, TriageDecision
+from pydantic import ValidationError
+
 from .validation import enum_errors, validate_evidence, validate_kb_ids
 from .models import EvidenceItem
 
@@ -40,6 +42,7 @@ class EvalCase:
     expected_needs_human_review: bool | None = None
     expected_kb_ids_include: tuple[str, ...] = ()
     must_not_priority: tuple[str, ...] = ()
+    must_not_kb_ids: tuple[str, ...] = ()
     covers: tuple[str, ...] = ()
     justification: str = ""
     tier_invariance_pair: str | None = None
@@ -60,6 +63,7 @@ def _case_from_entry(
         expected_needs_human_review=entry.get("expected_needs_human_review"),
         expected_kb_ids_include=tuple(entry.get("expected_kb_ids_include", ())),
         must_not_priority=tuple(entry.get("must_not_priority", ())),
+        must_not_kb_ids=tuple(entry.get("must_not_kb_ids", ())),
         covers=tuple(entry.get("covers", ())),
         justification=entry.get("justification", ""),
         tier_invariance_pair=entry.get("tier_invariance_pair"),
@@ -180,7 +184,13 @@ class CaseScore:
     case_id: str
     source: str
     mode: str
+    #: Full contract validity: the decision validates against TriageDecision.
+    #: Checks types, nested structure, confidence bounds and required inner
+    #: fields — not merely that the nine field names are present.
     schema_valid: bool = False
+    #: Closed-vocabulary validity, reported separately so a type error and an
+    #: invented enum value are not conflated.
+    closed_vocab_valid: bool | None = None
     category_correct: bool | None = None
     priority_correct: bool | None = None
     forbidden_priority_used: bool = False
@@ -200,6 +210,12 @@ class CaseScore:
     evidence_exact: int = 0
     kb_ids_count: int = 0
     kb_ids_unknown: int = 0
+    #: True when every expected article id is present. The allowlist catches an
+    #: invented id; this catches a *valid but wrong* article, which is a
+    #: different failure and was previously unmeasured.
+    expected_kb_ids_present: bool | None = None
+    #: Articles explicitly ruled out for this case that were selected anyway.
+    forbidden_kb_ids_used: tuple[str, ...] = field(default=())
     prohibition_violations: tuple[str, ...] = ()
     provider_failure: str | None = None
     crashed: bool = False
@@ -268,27 +284,32 @@ def score_raw_decision(
         score.schema_valid = False
         return score
 
-    # Schema validity: parseable, and every closed vocabulary respected.
-    errors = enum_errors(decision)
-    required = {
-        "ticket_id",
-        "category",
-        "priority",
-        "summary",
-        "evidence",
-        "recommended_action",
-        "confidence",
-        "needs_human_review",
-        "flags",
-    }
-    missing = required - set(decision)
-    if missing:
-        errors.append(f"missing fields: {sorted(missing)}")
+    # Full contract validity. Validating against the typed model checks types,
+    # nested structure, confidence bounds, and required inner fields. The previous
+    # implementation only checked that the nine field names were present and that
+    # three enums were legal, so a decision with ticket_id=123, summary=[],
+    # evidence="not-a-list" and confidence=99 scored as valid.
+    notes: list[str] = []
+    try:
+        TriageDecision.model_validate(decision)
+        contract_valid = True
+    except ValidationError as exc:
+        contract_valid = False
+        notes = [
+            f"{'.'.join(str(p) for p in e['loc']) or 'decision'}: {e['msg']}"
+            for e in exc.errors()[:4]
+        ]
     score.schema_valid = (
-        schema_valid_override if schema_valid_override is not None else not errors
+        schema_valid_override if schema_valid_override is not None else contract_valid
     )
-    if errors:
-        score.notes = tuple(errors[:4])
+
+    # Closed vocabularies, reported separately: an invented enum value and a type
+    # error are different defects and should not be collapsed into one number.
+    vocab_errors = enum_errors(decision)
+    score.closed_vocab_valid = not vocab_errors
+    notes.extend(vocab_errors[:2])
+    if notes:
+        score.notes = tuple(notes[:5])
 
     category = decision.get("category")
     priority = decision.get("priority")
@@ -344,6 +365,17 @@ def score_raw_decision(
             action_text = action["text"]
     score.kb_ids_count = len(kb_ids)
     score.kb_ids_unknown = len(validate_kb_ids(kb_ids, kb.allowed_ids).invalid)
+    if case.expected_kb_ids_include:
+        # A valid-but-wrong article passes the allowlist. A-012 selected
+        # KB-AUTH-02 (single-user login) for a whole-tenant outage and every
+        # automated metric passed it; this is the check that would have caught it.
+        score.expected_kb_ids_present = all(
+            expected in kb_ids for expected in case.expected_kb_ids_include
+        )
+    if case.must_not_kb_ids:
+        score.forbidden_kb_ids_used = tuple(
+            article for article in kb_ids if article in case.must_not_kb_ids
+        )
     score.prohibition_violations = tuple(count_prohibition_violations(action_text, kb))
 
     score.decision_fingerprint = _fingerprint(
@@ -378,6 +410,10 @@ def aggregate(scores: list[CaseScore]) -> dict[str, Any]:
     return {
         "cases": total,
         "schema_validity_pct": _rate(sum(1 for s in scores if s.schema_valid), total),
+        "closed_vocab_validity_pct": _rate(
+            sum(1 for s in scores if s.closed_vocab_valid),
+            sum(1 for s in scores if s.closed_vocab_valid is not None),
+        ),
         "category_accuracy_pct": _rate(
             sum(1 for s in scored_category if s.category_correct), len(scored_category)
         ),
@@ -408,6 +444,13 @@ def aggregate(scores: list[CaseScore]) -> dict[str, Any]:
         "ungrounded_quotes_emitted": evidence_total - evidence_exact,
         "kb_ids_total": kb_total,
         "unknown_kb_ids": sum(s.kb_ids_unknown for s in scores),
+        "expected_kb_ids_present_pct": _rate(
+            sum(1 for s in scores if s.expected_kb_ids_present),
+            sum(1 for s in scores if s.expected_kb_ids_present is not None),
+        ),
+        "forbidden_kb_ids_selected": sum(
+            1 for s in scores if s.forbidden_kb_ids_used
+        ),
         "prohibition_violations_lower_bound": sum(
             1 for s in scores if s.prohibition_violations
         ),
@@ -417,13 +460,16 @@ def aggregate(scores: list[CaseScore]) -> dict[str, Any]:
 
 
 _METRIC_LABELS: tuple[tuple[str, str], ...] = (
-    ("schema_validity_pct", "Schema validity"),
+    ("schema_validity_pct", "Full contract validity"),
+    ("closed_vocab_validity_pct", "Closed-vocabulary validity"),
     ("category_accuracy_pct", "Category accuracy"),
     ("priority_accuracy_pct", "Priority accuracy"),
     ("forbidden_priority_violations", "Forbidden-priority violations"),
     ("valid_evidence_quotes_pct", "Valid evidence quotes"),
     ("ungrounded_quotes_emitted", "Ungrounded quotes emitted"),
     ("unknown_kb_ids", "Unknown KB IDs"),
+    ("expected_kb_ids_present_pct", "Expected KB article selected"),
+    ("forbidden_kb_ids_selected", "Ruled-out KB article selected"),
     ("prohibition_violations_lower_bound", "Ungrounded commitments (lower bound)"),
     ("ticket_id_mismatches", "Ticket-ID mismatches"),
     ("review_accuracy_pct", "Human-review accuracy"),

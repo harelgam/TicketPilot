@@ -69,7 +69,12 @@ class CallCappedProvider:
         system: str,
         messages: list[dict[str, str]],
         output_model: type[BaseModel] | None = None,
+        system_suffix: str | None = None,
     ) -> ProviderResult:
+        # Every parameter must be accepted and forwarded verbatim. This wrapper
+        # once omitted system_suffix, added to the protocol when the canary was
+        # split out for prompt caching, and the omission broke this entire script
+        # with a TypeError before any API call was made.
         if self.call_count >= self.max_calls:
             print(
                 f"  [capped] refusing call {self.call_count + 1}: "
@@ -82,7 +87,10 @@ class CallCappedProvider:
         self.call_count += 1
         print(f"  [call {self.call_count}/{self.max_calls}] contacting the API ...")
         result = self.inner.generate(
-            system=system, messages=messages, output_model=output_model
+            system=system,
+            messages=messages,
+            output_model=output_model,
+            system_suffix=system_suffix,
         )
         for key, value in result.usage.items():
             self.usage_total[key] = self.usage_total.get(key, 0) + value

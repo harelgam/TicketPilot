@@ -150,25 +150,50 @@ class TestScoring:
         assert score.forbidden_priority_used is True
 
     def test_any_of_expectations_accept_either_value(self, kb) -> None:
-        case = self._case(case_id="A-005")  # conflicting signals
-        for priority in ("P2", "P3", "UNKNOWN"):
+        # A-011 keeps a category any-of: a blanket HTTP 500 across all API calls is
+        # defensibly BUG or OTHER, and insisting on one would measure the label
+        # choice rather than the system.
+        case = self._case(case_id="A-011")
+        for category in ("BUG", "OTHER"):
             score = score_raw_decision(
                 case,
                 {
-                    "ticket_id": "A-005",
-                    "category": "BUG",
-                    "priority": priority,
+                    "ticket_id": "A-011",
+                    "category": category,
+                    "priority": "P0",
                     "summary": "x",
                     "evidence": [],
                     "recommended_action": {"text": "x", "kb_ids": []},
-                    "confidence": 0.5,
+                    "confidence": 0.9,
                     "needs_human_review": True,
-                    "flags": ["CONFLICTING_SIGNALS"],
+                    "flags": [],
                 },
                 kb,
                 mode="final",
             )
-            assert score.priority_correct is True, priority
+            assert score.category_correct is True, category
+
+    def test_any_of_rejects_a_value_outside_the_list(self, kb) -> None:
+        # AUTH was removed from A-011's list: the ticket mentions no login,
+        # password or SSO, so accepting it would have been lenient.
+        case = self._case(case_id="A-011")
+        score = score_raw_decision(
+            case,
+            {
+                "ticket_id": "A-011",
+                "category": "AUTH",
+                "priority": "P0",
+                "summary": "x",
+                "evidence": [],
+                "recommended_action": {"text": "x", "kb_ids": []},
+                "confidence": 0.9,
+                "needs_human_review": True,
+                "flags": [],
+            },
+            kb,
+            mode="final",
+        )
+        assert score.category_correct is False
 
     def test_none_decision_is_scored_as_invalid_not_crashed(self, kb) -> None:
         case = self._case(case_id="A-002")
@@ -222,7 +247,7 @@ class TestAggregation:
 
     def test_comparison_table_renders_both_columns(self) -> None:
         table = render_comparison({"schema_validity_pct": 75.0}, {"schema_validity_pct": 100.0})
-        assert "| Schema validity | 75.0% | 100.0% |" in table
+        assert "| Full contract validity | 75.0% | 100.0% |" in table
 
     def test_comparison_table_handles_a_missing_arm(self) -> None:
         table = render_comparison(None, {"schema_validity_pct": 100.0})

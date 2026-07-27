@@ -40,7 +40,11 @@ from ticketpilot.kb import KnowledgeBase  # noqa: E402
 
 def rescore(path: Path, kb: KnowledgeBase) -> dict[str, Any]:
     """Re-score one results.jsonl against the current expectations."""
-    cases = {c.case_id: c for c in load_cases("all")}
+    # Keyed on ticket_id rather than on an embedded score: records deliberately do
+    # not carry one, because a stored score goes stale as soon as a label changes.
+    # case_id equals ticket_id for every case in this suite (asserted in
+    # tests/test_eval_data.py).
+    cases = {c.ticket.ticket_id: c for c in load_cases("all")}
     records = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
 
     first_pass: dict[str, CaseScore] = {}
@@ -48,13 +52,16 @@ def rescore(path: Path, kb: KnowledgeBase) -> dict[str, Any]:
     fingerprints: dict[str, list[str]] = defaultdict(list)
     mode = records[0]["mode"] if records else "unknown"
     changed: list[str] = []
+    uncomparable: set[str] = set()
 
     for record in records:
+        # Tolerates legacy records that still embed a score, for artifacts
+        # written before it was removed.
         old = record["diagnostics"].get("score") or {}
-        case_id = old.get("case_id")
-        case = cases.get(case_id)
+        case = cases.get(record.get("ticket_id"))
         if case is None:
             continue
+        case_id = case.case_id
 
         score = score_raw_decision(
             case,
@@ -66,12 +73,20 @@ def rescore(path: Path, kb: KnowledgeBase) -> dict[str, Any]:
 
         # Report any case whose verdict moved, so a reader can see exactly what the
         # expectation change did rather than only its effect on the totals.
+        #
+        # Only fields actually present in a stored score are comparable. Records
+        # written after the embedded score was removed have none, and treating a
+        # missing value as a previous verdict reported every field of every case as
+        # "None -> True" — a hundred entries implying a hundred changes. A comparison
+        # that has no baseline must report nothing, not everything.
         for field in ("category_correct", "priority_correct", "review_correct",
                       "expected_flags_present"):
-            if old.get(field) != getattr(score, field):
+            if field in old and old[field] != getattr(score, field):
                 changed.append(
-                    f"{case_id}.{field}: {old.get(field)} -> {getattr(score, field)}"
+                    f"{case_id}.{field}: {old[field]} -> {getattr(score, field)}"
                 )
+        if not old:
+            uncomparable.add(case_id)
 
         if record.get("run_index", 0) == 0:
             first_pass[case_id] = score
@@ -91,6 +106,13 @@ def rescore(path: Path, kb: KnowledgeBase) -> dict[str, Any]:
         "supplied_tickets": aggregate(supplied) if supplied else None,
         "verdict_changes": changed,
     }
+    if uncomparable:
+        result["verdict_changes_note"] = (
+            f"{len(uncomparable)} of {len(first_pass)} cases carry no stored score to "
+            "compare against, so no change could be detected for them. Records "
+            "deliberately do not embed a score; the metrics here are recomputed from "
+            "the stored decisions under the current expectations."
+        )
     if fingerprints:
         result["stability"] = stability_report(dict(fingerprints))
     return result
@@ -116,6 +138,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  changed: {change}")
         if not scored["verdict_changes"]:
             print("  no verdict changed")
+        if scored.get("verdict_changes_note"):
+            print(f"  note: {scored['verdict_changes_note']}")
 
         if args.write:
             metrics_path = path.parent / "metrics.json"

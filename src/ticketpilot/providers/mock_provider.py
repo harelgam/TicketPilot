@@ -155,7 +155,7 @@ class MockProvider:
                 failure=failure, failure_detail=detail, model="mock-model"
             )
 
-        text = self._body_for(script)
+        text = self._body_for(script, structured=output_model is not None)
         if output_model is None:
             return ProviderResult(text=text, model="mock-model")
 
@@ -173,7 +173,16 @@ class MockProvider:
         except ValidationError:
             return ProviderResult(text=text, model="mock-model")
 
-    def _body_for(self, script: Script) -> str:
+    def _body_for(self, script: Script, *, structured: bool = True) -> str:
+        """Render the scripted body in the shape the caller asked for.
+
+        The two pipelines request different structures, and emitting the union of
+        both makes each look malformed to the other. In text mode the baseline
+        expects exactly the nine contract fields, so the top-level ``kb_ids`` that
+        ``ModelTriageOutput`` requires must be omitted — leaving it in scored every
+        baseline decision as a contract violation for an extra field the baseline
+        was never asked to produce.
+        """
         if script is Script.MALFORMED_JSON:
             return "Sure! Here is the triage decision: {category: BILLING, priority"
         if script is Script.INCOMPLETE_JSON:
@@ -240,5 +249,9 @@ class MockProvider:
             action = dict(payload["recommended_action"])  # type: ignore[arg-type]
             action.setdefault("kb_ids", payload["kb_ids"])
             payload["recommended_action"] = action
+
+        if not structured:
+            # Baseline shape: the nine contract fields only. See the docstring.
+            payload.pop("kb_ids", None)
 
         return json.dumps(payload, ensure_ascii=False)

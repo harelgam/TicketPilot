@@ -171,10 +171,14 @@ class TriageDecision(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    ticket_id: str
+    # ticket_id and summary carry the same non-empty constraint as their
+    # counterparts on the input and model-output models. Without it the emitted
+    # contract was laxer than what the model is asked to produce, so an empty
+    # summary would validate here while failing upstream.
+    ticket_id: str = Field(min_length=1)
     category: Category
     priority: Priority
-    summary: str
+    summary: str = Field(min_length=1)
     evidence: list[EvidenceItem]
     recommended_action: RecommendedAction
     confidence: float = Field(ge=0.0, le=1.0)

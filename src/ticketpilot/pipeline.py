@@ -41,7 +41,7 @@ from .prompts import (
     build_user_prompt,
     new_canary,
 )
-from .providers.base import LLMProvider
+from .providers.base import LLMProvider, ProviderFailure, ProviderResult
 from .review import DegradedPath, ReviewSignals, decide, flags_for_degraded_path, resolve_flags
 from .validation import clamp_unit_interval, contains_canary, validate_evidence, validate_kb_ids
 
@@ -88,6 +88,26 @@ def _fallback(
         needs_human_review=True,
         flags=flags,
     )
+
+
+def _safe_generate(provider: LLMProvider, **kwargs: Any) -> ProviderResult:
+    """Call a provider without letting it raise.
+
+    ``AnthropicProvider`` already converts its own exceptions into a
+    ``ProviderResult``, but this function's contract is "never raises" for *any*
+    provider — including a decorator or test double that does not honour the
+    protocol. A wrapper in scripts/ once omitted a keyword argument added to the
+    protocol, and the resulting TypeError propagated straight out of triage(),
+    which made the docstring false. The boundary belongs here, at the call site,
+    rather than depending on every implementation being correct.
+    """
+    try:
+        return provider.generate(**kwargs)
+    except Exception as exc:  # noqa: BLE001 - deliberately broad; see docstring
+        return ProviderResult(
+            failure=ProviderFailure.API_ERROR,
+            failure_detail=f"provider raised {type(exc).__name__}: {exc}",
+        )
 
 
 def _validation_errors(raw_text: str | None) -> list[str]:
@@ -145,7 +165,8 @@ def triage(
     ]
 
     # ---- First call --------------------------------------------------------
-    result = provider.generate(
+    result = _safe_generate(
+        provider,
         system=system,
         messages=messages,
         output_model=ModelTriageOutput,
@@ -188,7 +209,8 @@ def triage(
             {"role": "assistant", "content": result.text or ""},
             {"role": "user", "content": build_repair_prompt(kb, errors)},
         ]
-        repaired = provider.generate(
+        repaired = _safe_generate(
+            provider,
             system=system,
             messages=repair_messages,
             output_model=ModelTriageOutput,

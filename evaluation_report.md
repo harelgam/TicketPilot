@@ -7,13 +7,16 @@ plus 3 repeats on 3 stability tickets. 51 provider calls, $1.09 at list price.
 
 | Metric | Baseline | Final |
 | --- | --- | --- |
-| Schema validity | 100% | 100% |
+| Full contract validity | 100% | 100% |
+| Closed-vocabulary validity | 100% | 100% |
 | Category accuracy | 100% | 100% |
-| Priority accuracy | 85% | **95%** |
+| Priority accuracy | 80% | **95%** |
 | Forbidden-priority violations | 0 | **1** |
 | Valid evidence quotes (exact substring) | 100% | 100% |
 | Ungrounded quotes emitted | 0 | 0 |
 | Unknown KB IDs | 0 | 0 |
+| Expected KB article selected | 100% | 100% |
+| Ruled-out KB article selected | 0 | **1** |
 | `ticket_id` mismatches | 0 | 0 |
 | Human-review accuracy | **100%** | **95%** |
 | Required flags present (inclusion) | 66.7% | **93.3%** |
@@ -31,21 +34,34 @@ plus 3 repeats on 3 stability tickets. 51 provider calls, $1.09 at list price.
 Artifacts: `artifacts/live-evaluation/{baseline,final}/`. Reproduce with
 `python run_eval.py --mode both --cases all --runs 3`.
 
-**The final version is better on four metrics and worse on two.** It wins on priority
-accuracy, required-flag recall, self-consistency, and stability. It loses on
-review accuracy (one over-escalation) and forbidden-priority violations (one case
-where the baseline was right and it was wrong). The rows marked *not measured* are
+**The final version is better on four metrics and worse on three.** It wins on
+priority accuracy, required-flag recall, self-consistency, and stability. It loses on
+review accuracy (one over-escalation), one forbidden-priority violation the baseline
+got right (A-006), and one ruled-out KB article selected (A-012). The rows marked *not automated* are
 where the automated scorer cannot see the problem at all; a manual review of all 20
 final-arm outputs supplied those figures, and that review is the most important part of
 this report.
 
-### How to read three of these rows
+### How to read five of these rows
 
 *Required flags present* is an **inclusion** metric: it checks that every required
 flag is present and does **not** penalise additional flags, because the expected
 lists specify minimum required sets rather than exhaustive ones. So 93.3% inclusion
 is not 93.3% flag accuracy. The two rows beneath it supply what inclusion omits: 6
 cases carried extra flags, of which manual review judged 2 unjustified.
+
+*Full contract validity* means the decision validates against the typed
+`TriageDecision` — types, nested structure, confidence bounds, required inner fields.
+An earlier version of this scorer checked only that the nine field names were present
+and that three enums were legal, so a decision with `ticket_id: 123`, `summary: []`
+and `confidence: 99` scored as valid. Closed-vocabulary validity is now reported
+separately, because a type error and an invented enum value are different defects.
+
+*Expected KB article selected* and *Ruled-out KB article selected* are new. The
+allowlist rejects an invented id, but a legitimate article chosen for the wrong
+situation previously passed every check — which is exactly what happened on A-012.
+That case now names KB-AUTH-02 in `must_not_kb_ids`, and the metric catches
+automatically what had been found only by reading the output.
 
 *Category accuracy is 100% for both arms*, so nothing in this run distinguished a
 correct category from an incorrect one.
@@ -164,7 +180,7 @@ matched the expected review outcome while being internally inconsistent, and the
 version was internally consistent while over-escalating. Both facts are real, and
 collapsing them into one number hides one of them.
 
-### 2. Priority accuracy: 85% → 95%, with one final-version error
+### 2. Priority accuracy: 80% → 95%, with one final-version error
 
 The final version returned **P1 on A-006**, where P0 is required: `P0` covers "an
 active, verified security or data-exposure incident", and the ticket has all three —
@@ -214,23 +230,46 @@ mixed rather than absent — see the manual review.
 
 ## Expectation corrections, disclosed
 
-Two expected labels changed after the run. Both are recorded in
-`data/eval/cases.json` under `revised_after_live_run`, and both move the numbers
-**against** the final version.
+Seven expected labels changed after the run. Every one is recorded in
+`data/eval/cases.json` under a `revised_after_live_run` block carrying the previous
+value, the reason, and the direction of impact, so a reader can check that corrections
+did not run one way.
 
-**A-006: `any_of ["P0","P1"]` → `P0` exactly.** The original hedge was wrong and
-masked a real error. The case exists as the active-exposure mirror of T-006's
-contained exposure; accepting P1 removed the distinction it was built to test.
-Effect: final priority accuracy 100% → 95%, and one forbidden-priority violation.
+**Against the final version:**
 
-**A-001: reverted to the original expectation.** I had briefly changed this to expect
-`MISSING_INFO` and review after the live run showed it as the final version's only
-review miss. That was wrong on the policy — `MISSING_INFO` concerns information
-required for a reliable *decision*, and AUTH/P2 is determinable without knowing SSO
-versus local password, which matters for downstream handling — and wrong on method,
-because revising an expectation that penalised my own system is not defensible even
-when disclosed. Effect: final review accuracy 100% → 95%; the baseline's inconsistency
-on the same case is captured by the self-consistency metric instead.
+- **A-006: `any_of ["P0","P1"]` → `P0` exactly.** The original hedge was wrong and
+  masked a real error. The case exists as the active-exposure mirror of T-006's
+  contained exposure; accepting P1 removed the distinction it was built to test.
+  Effect: final priority accuracy 100% → 95%, and one forbidden-priority violation.
+- **A-012: added `must_not_kb_ids: ["KB-AUTH-02"]`.** The ticket is a single user
+  locked out after failed attempts; KB-AUTH-02 covers suspected credential
+  compromise, which this ticket gives no evidence of. Selecting it is a real
+  over-escalation that the allowlist cannot catch, because the ID is legitimate.
+  Effect: the new ruled-out-KB metric goes 0 → 1 against the final version.
+- **A-001: reverted to the original expectation.** I had briefly changed this to
+  expect `MISSING_INFO` and review after the live run showed it as the final version's
+  only review miss. That was wrong on the policy — `MISSING_INFO` concerns information
+  required for a reliable *decision*, and AUTH/P2 is determinable without knowing SSO
+  versus local password — and wrong on method, because revising an expectation that
+  penalised my own system is not defensible even when disclosed. Effect: final review
+  accuracy 100% → 95%.
+
+**Against the baseline:**
+
+- **A-005: `any_of` → exact `UNKNOWN`/`UNKNOWN`.** The ticket contains no operational
+  fact at all, so the policy's abstention value is not one plausible answer among
+  several; it is the answer.
+
+**Neutral (both arms already matched):**
+
+- **A-007: `any_of ["P2","P3"]` → `P2`.** A reproducible functional defect affecting a
+  documented workflow is P2 under the policy; P3 was an unjustified hedge.
+- **A-010: `any_of ["P1","P2"]` → `P1`.** Billing failure blocking renewal for a paying
+  customer matches P1 directly.
+- **A-011: category `any_of ["BUG","OTHER"]`.** Widened rather than narrowed: the
+  ticket describes behaviour that is arguably intended, and the policy does not decide
+  between the two. Pretending it does would have made the metric measure my reading
+  rather than the policy.
 
 Re-scoring used `scripts/rescore.py` against stored decisions: no new API calls, and
 the decisions are unchanged.
@@ -299,7 +338,8 @@ python run_eval.py --mode both --cases all --offline --adversarial --out adversa
 
 | Metric | Baseline | Final |
 | --- | --- | --- |
-| Schema validity | 55% | 100% |
+| Full contract validity | 55% | 100% |
+| Closed-vocabulary validity | 73.3% | 100% |
 | Ungrounded quotes emitted | 15 | 0 |
 | Unknown KB IDs emitted | 5 | 0 |
 | Ungrounded commitments (lower bound) | 2 | 0 |
@@ -311,7 +351,13 @@ fell back because scripted evidence does not match real ticket text — attribut
 comes from `test_invented_kb_id_is_dropped_valid_kept`. The ungrounded-commitment
 metric is a lower bound whose recall failure is demonstrated in the manual review
 above. Category and priority accuracy are meaningless here and omitted. About a third
-of the baseline's schema invalidity is provider failures.
+of the baseline's contract invalidity is provider failures (3 of 20 cases).
+
+These figures were regenerated from the current commit after a fixture bug was fixed:
+the mock previously emitted the union of both output shapes, and its top-level
+`kb_ids` — required by `ModelTriageOutput`, forbidden by `TriageDecision` — scored
+every baseline decision as a contract violation for a field the baseline is never asked
+to produce. The 55% is what the baseline's *real* defects cost.
 
 ---
 
@@ -324,8 +370,13 @@ of the baseline's schema invalidity is provider failures.
 2. **The summary is unvalidated.** Evidence quotes are checked character-for-character
    but the summary is not checked at all, and §3 requires it to be factual. A-006
    shows an unsupported detail surviving alongside 100% exact evidence.
-3. **Flag precision is not measured.** The metric is inclusion-only; A-012 shows a
-   false-positive flag it cannot see.
+3. **Flag precision is not measured.** The metric is inclusion-only, so a
+   false-positive flag is invisible to it; the 2 unjustified extras were found by
+   reading the output. Note that under the escalate-only rule a flag false positive
+   becomes a review false positive, which makes flag precision the gating metric
+   rather than a cosmetic one. KB *selection* is now scored — `must_not_kb_ids`
+   catches a legitimate article chosen for the wrong situation — but only where a case
+   author anticipated the wrong choice.
 4. **Action relevance is not measured.** Grounding is guaranteed by construction;
    relevance is not, and 6 of 20 cases show redundant or irrelevant steps.
 5. **A plausible-but-wrong classification passes every check.** Category accuracy was
@@ -374,14 +425,45 @@ of the baseline's schema invalidity is provider failures.
    `kb_ids` or `flags` validated with an empty list substituted, skipping the repair it
    should have earned.
 8. **The canary defeated prompt caching**, costing 2.7× on the final arm.
-9. **Two expected labels were wrong** (A-006 hedged, A-001 revised in my own favour),
-   both corrected against the final version's score.
+9. **Several expected labels were wrong.** A-006 was hedged as any-of when the policy
+   determines P0; A-001 was revised in my own favour and then reverted; A-005, A-007,
+   A-010 and A-011 were all too lenient. Each correction is recorded per case with its
+   direction of impact — A-005 penalises the baseline, A-012's new `must_not_kb_ids`
+   penalises the final version, the rest are neutral.
+10. **`scripts/verify_live.py` was broken.** Splitting the canary into a separate
+    system block added `system_suffix` to the provider protocol and to both
+    providers, but not to the `CallCappedProvider` wrapper in `scripts/`. The
+    documented command died with a `TypeError` before reaching the API. The
+    live-verification artifact predates the split and is still valid.
+11. **`triage()` claimed "never raises" and did not.** The bug above propagated
+    straight out of the pipeline, because provider calls were unwrapped. Provider
+    calls now go through a boundary that converts any exception into a
+    `ProviderResult` failure, so the guarantee holds for a non-conforming provider or
+    wrapper rather than depending on every implementation being correct.
+12. **The scorer's "schema validity" did not validate the schema** — nine field names
+    and three enums only. Now validates the full typed contract.
+13. **`expected_kb_ids_include` was loaded and never read**, so a valid-but-wrong
+    article selection was invisible.
+14. **Run records embedded a score that went stale.** After a label correction,
+    `metrics.json` said a verdict was wrong while the record beside it still said
+    "correct". The score is a derivative of the decision plus current expectations,
+    so it is no longer stored: `rescore.py` recomputes it from the decision. Removing
+    it then broke the change report in the opposite direction — with no stored score to
+    compare against, every field of every case read as `None -> True`, so
+    `verdict_changes` listed a hundred entries implying a hundred moved verdicts. Three
+    moved. A comparison with no baseline now reports nothing and says why.
+15. **The mock emitted the union of both output shapes.** Its top-level `kb_ids`,
+    required by `ModelTriageOutput`, is forbidden by `TriageDecision`, which scored
+    every offline baseline decision as a contract violation for a field the baseline
+    was never asked to produce. It now emits the shape each mode requests.
+16. **`TriageDecision` was laxer than `ModelTriageOutput`** — an empty `summary`
+    validated on the emitted contract while failing upstream.
 
 ---
 
 ## Test suite
 
-313 tests, all offline, no API key required.
+351 tests, all offline, no API key required.
 
 ```bash
 python -m pytest
@@ -391,7 +473,7 @@ python -m pytest
 | --- | --- | --- |
 | `test_pipeline.py` | 54 | Deterministic-layer invariants, repair budget, failure safety, cache placement |
 | `test_injection.py` | 36 | Detection (EN + HE), false positives |
-| `test_evaluation.py` | 33 | Scoring instruments, prohibition scan, stability |
+| `test_evaluation.py` | 34 | Scoring instruments, prohibition scan, stability |
 | `test_review.py` | 33 | Review policy, escalate-only, flag provenance |
 | `test_validation.py` | 27 | Evidence grounding, allowlists, clamping, canary |
 | `test_eval_data.py` | 26 | Data integrity as build failures |
@@ -400,4 +482,5 @@ python -m pytest
 | `test_config.py` | 18 | Settings, path resolution, `.env` loading |
 | `test_baseline.py` | 14 | Baseline is weak in the intended ways |
 | `test_schemas.py` | 14 | Committed schemas match the models |
+| `test_regressions.py` | 37 | Defects found by review: broken wrapper, scorer validity, KB selection, config bounds |
 | `test_actions.py` | 11 | Action assembly, safe generic text |

@@ -185,8 +185,11 @@ def _run_baseline_case(
         "usage": result.usage,
         "model": result.model,
         "raw_text": result.raw_text,
-        "score": score,
     }
+    # The score is deliberately NOT stored in the record. It is a derivative of the
+    # decision plus the current expectations, and an embedded copy goes stale the
+    # moment a label is corrected — which produced artifacts where metrics.json said
+    # a verdict was wrong while the record beside it still said "correct".
     return score, diagnostics, result.decision
 
 
@@ -207,7 +210,7 @@ def _run_final_case(
         provider_failure=outcome.diagnostics.get("provider_failure"),
     )
     diagnostics = dict(outcome.diagnostics)
-    diagnostics["score"] = score
+    # See the note in _run_baseline_case: the score stays out of the record.
     return score, diagnostics, decision_dict
 
 

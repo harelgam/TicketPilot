@@ -13,10 +13,11 @@ fabrication.
 
 > **Evaluation status: complete, with a mixed result.** Full baseline-to-final
 > comparison against the real API — 20 cases × 2 arms plus 3×3 stability, 51 calls,
-> $1.09. The final version is better on priority accuracy (85% → 95%), required-flag
+> $1.09. The final version is better on priority accuracy (80% → 95%), required-flag
 > recall (67% → 93%), self-consistency (5 → 0 self-contradictory decisions) and
-> stability (67% → 100%); and **worse** on review accuracy (100% → 95%, one
-> over-escalation) and one forbidden-priority violation the baseline got right.
+> stability (67% → 100%); and **worse** on review accuracy (100% → 95%), one
+> forbidden-priority violation the baseline got right (A-006), and one ruled-out KB
+> article selected (A-012).
 >
 > A manual semantic review found problems no automated metric caught: assembled action
 > text is always KB-grounded but context-insensitive in 6 of 20 cases, one flag is a
@@ -55,7 +56,7 @@ cp .env.example .env      # then edit .env and set ANTHROPIC_API_KEY
 clean-environment requirement verifiable.
 
 Verified from a clean checkout (`git archive` of HEAD into an empty directory, fresh
-venv, install from `requirements.txt` only): 313 tests pass with no API key, and pass
+venv, install from `requirements.txt` only): 351 tests pass with no API key, and pass
 from a different working directory; the CLI, the `triage` entry point, batch mode, and
 the schema generator all work.
 
@@ -121,7 +122,7 @@ python scripts/rescore.py artifacts/live-evaluation/*/results.jsonl --write
 ### Run the tests
 
 ```bash
-python -m pytest        # 313 tests, all offline
+python -m pytest        # 351 tests, all offline
 ```
 
 ### Regenerate the JSON schemas
@@ -324,7 +325,10 @@ the reported evaluation.
 3. **Flag precision, action relevance, and summary factuality are measured only by
    hand.** A manual review of all 20 outputs found action text context-insensitive in
    6 cases, 2 unjustified flags, and 1 unsupported summary detail. No code computes
-   these, so they will not be recomputed on a future run.
+   these, so they will not be recomputed on a future run. One item from that review
+   *was* promoted into code: choosing a legitimate KB article for the wrong situation
+   is now scored via `must_not_kb_ids`, which is how A-012 became an automated metric
+   rather than a note. It still only catches wrong choices a case author anticipated.
 4. **A flag false positive becomes a review false positive.** The escalate-only rule
    is correct but amplifies flag errors — the single review error is downstream of an
    unjustified `MISSING_INFO` on A-001, not independent of it.
