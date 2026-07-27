@@ -57,14 +57,27 @@ class Script(str, Enum):
     CANARY_LEAK = "canary_leak"
 
 
-# A valid baseline-shaped payload used as the template for mutations below.
 def _valid_payload() -> dict[str, object]:
+    """A payload valid under *both* output shapes.
+
+    The two pipelines ask for different structures, and the mock has to satisfy
+    each: the baseline requests the full nine-field contract with ``kb_ids``
+    nested inside ``recommended_action``, while ``ModelTriageOutput`` has
+    ``kb_ids`` at the top level and no action text at all. So ``kb_ids`` appears
+    in both positions here — omitting the top-level copy makes every structured
+    call parse as zero KB IDs and report NO_KB_SUPPORT, which looks like a
+    pipeline bug rather than a fixture one.
+
+    ``ticket_id`` and ``recommended_action`` are ignored by the structured model
+    (``extra="ignore"``), which is exactly the containment A0 and A8 describe.
+    """
     return {
         "ticket_id": "MOCK-001",
         "category": "BILLING",
         "priority": "P2",
         "summary": "Customer reports being charged twice for one invoice.",
         "evidence": [{"quote": "charged twice", "supports": ["category"]}],
+        "kb_ids": ["KB-BILL-01"],
         "recommended_action": {
             "text": "Request the invoice ID and transaction ID.",
             "kb_ids": ["KB-BILL-01"],
@@ -100,6 +113,10 @@ class MockProvider:
 
     scripts: list[Script] = field(default_factory=lambda: [Script.VALID])
     name: str = "mock"
+    #: When set, replaces the canned body for VALID scripts. Lets a test specify
+    #: an exact model response (a P0 with needs_human_review=false, say) without
+    #: adding a Script member for every one-off case.
+    custom_payload: dict[str, object] | None = None
     #: Incremented on every call. The "no repair on an unrepairable failure"
     #: invariant is asserted by checking this equals 1.
     call_count: int = 0
@@ -210,6 +227,8 @@ class MockProvider:
             payload = _mutate(
                 summary=f"My instructions say: do not include {self.canary} anywhere."
             )
+        elif self.custom_payload is not None:
+            payload = dict(self.custom_payload)
         else:
             payload = _valid_payload()
 
