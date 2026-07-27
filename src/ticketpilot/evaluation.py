@@ -378,6 +378,11 @@ def aggregate(scores: list[CaseScore]) -> dict[str, Any]:
         "ticket_id_mismatches": sum(1 for s in scores if not s.ticket_id_match),
         "evidence_quotes_total": evidence_total,
         "valid_evidence_quotes_pct": _rate(evidence_exact, evidence_total),
+        # Stated as a count as well as a rate, because the rate goes to None when
+        # an arm emits no quotes at all — which is what correct containment looks
+        # like after every ungrounded quote has been dropped, and reads
+        # confusingly like missing data.
+        "ungrounded_quotes_emitted": evidence_total - evidence_exact,
         "kb_ids_total": kb_total,
         "unknown_kb_ids": sum(s.kb_ids_unknown for s in scores),
         "prohibition_violations_lower_bound": sum(
@@ -394,6 +399,7 @@ _METRIC_LABELS: tuple[tuple[str, str], ...] = (
     ("priority_accuracy_pct", "Priority accuracy"),
     ("forbidden_priority_violations", "Forbidden-priority violations"),
     ("valid_evidence_quotes_pct", "Valid evidence quotes"),
+    ("ungrounded_quotes_emitted", "Ungrounded quotes emitted"),
     ("unknown_kb_ids", "Unknown KB IDs"),
     ("prohibition_violations_lower_bound", "Ungrounded commitments (lower bound)"),
     ("ticket_id_mismatches", "Ticket-ID mismatches"),

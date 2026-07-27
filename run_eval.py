@@ -43,7 +43,7 @@ from ticketpilot.evaluation import (  # noqa: E402
     stability_report,
 )
 from ticketpilot.kb import KnowledgeBase  # noqa: E402
-from ticketpilot.providers import MockProvider, build_provider  # noqa: E402
+from ticketpilot.providers import MockProvider, Script, build_provider  # noqa: E402
 from ticketpilot.storage import RunRecord, RunWriter  # noqa: E402
 
 # Three representative tickets for the stability metric: an escalation with an
@@ -52,9 +52,41 @@ from ticketpilot.storage import RunRecord, RunWriter  # noqa: E402
 STABILITY_TICKETS = ("T-001", "T-004", "T-005")
 
 
-def _make_provider(offline: bool, settings: Settings):
+# Defect scripts cycled through in --adversarial mode. Each is a specific way a
+# model can produce output that looks plausible and is wrong.
+ADVERSARIAL_SCRIPTS = (
+    Script.INVENTED_KB_ID,
+    Script.FABRICATED_REFUND_PROMISE,
+    Script.PARAPHRASED_QUOTE,
+    Script.INVENTED_CATEGORY,
+    Script.ALL_KB_IDS_INVENTED,
+    Script.TRANSLATED_QUOTE,
+    Script.INVENTED_PRIORITY,
+    Script.MALFORMED_JSON,
+    Script.INVENTED_FLAG,
+    Script.CANARY_LEAK,
+    Script.TIMEOUT,
+    Script.INCOMPLETE_JSON,
+    Script.REFUSAL,
+    Script.EMPTY_CONTENT,
+)
+
+
+def _make_provider(offline: bool, settings: Settings, script_index: int | None = None):
+    """Build the provider for one case.
+
+    ``script_index`` selects an adversarial script, cycling so that every case in
+    the set meets a different defect. This is what makes the containment claims
+    measurable without spending anything on the API: the same hostile responses go
+    to both arms, and the metrics show how many reach the output.
+    """
     if offline:
-        return MockProvider()
+        if script_index is None:
+            return MockProvider()
+        script = ADVERSARIAL_SCRIPTS[script_index % len(ADVERSARIAL_SCRIPTS)]
+        # Repeated so a repair attempt meets the same defect: a defect that
+        # vanishes on retry would overstate the final version's containment.
+        return MockProvider([script, script])
     return build_provider(settings)
 
 
@@ -140,6 +172,7 @@ def run_mode(
     offline: bool,
     runs: int,
     out_name: str,
+    adversarial: bool = False,
 ) -> dict[str, Any]:
     """Execute one mode over all cases and write artifacts."""
     writer = RunWriter(out_name, settings)
@@ -147,12 +180,12 @@ def run_mode(
     all_scores: list[CaseScore] = []
     fingerprints: dict[str, list[str]] = defaultdict(list)
 
-    runner = _run_baseline_case if mode == "baseline" else _run_final_case
-
-    for case in cases:
+    for case_index, case in enumerate(cases):
         repeats = runs if (runs > 1 and case.ticket.ticket_id in STABILITY_TICKETS) else 1
         for index in range(repeats):
-            provider = _make_provider(offline, settings)
+            provider = _make_provider(
+                offline, settings, case_index if adversarial else None
+            )
             try:
                 if mode == "baseline":
                     score, diagnostics, decision = _run_baseline_case(case, kb, provider)
@@ -207,7 +240,22 @@ def run_mode(
     }
     if fingerprints:
         metrics["stability"] = stability_report(dict(fingerprints))
-    if offline:
+    if offline and adversarial:
+        metrics["interpretation"] = (
+            "Adversarial offline run. Each case receives a different scripted "
+            "defect (invented KB id, fabricated refund promise, paraphrased or "
+            "translated quote, invented enum value, malformed JSON, canary leak, "
+            "timeout, refusal), repeated so a repair attempt meets the same "
+            "defect. Both arms see identical hostile responses. Category and "
+            "priority accuracy are meaningless here — the scripted decisions bear "
+            "no relation to the tickets. The containment rows are the point: "
+            "unknown KB IDs, ungrounded commitments, ungrounded evidence quotes, "
+            "ticket-id mismatches, schema validity, and crashes. Those are "
+            "structural properties of the code, so they hold independently of "
+            "model behaviour and are reproducible at zero API cost."
+        )
+        metrics["adversarial_scripts"] = [s.value for s in ADVERSARIAL_SCRIPTS]
+    elif offline:
         metrics["warning"] = (
             "Offline run: the scripted provider returns the same canned decision "
             "for every ticket. Accuracy figures here are meaningless by "
@@ -235,7 +283,17 @@ def main(argv: list[str] | None = None) -> int:
         help="Use the scripted provider. No API key needed; not an accuracy measurement.",
     )
     parser.add_argument("--out", default=None, help="Artifact directory name under runs/.")
+    parser.add_argument(
+        "--adversarial",
+        action="store_true",
+        help=(
+            "With --offline: give each case a different scripted defect. Measures "
+            "containment of hostile model output at zero API cost."
+        ),
+    )
     args = parser.parse_args(argv)
+    if args.adversarial and not args.offline:
+        parser.error("--adversarial requires --offline (it drives the scripted provider)")
 
     settings = Settings.from_env()
     kb = KnowledgeBase.load()
@@ -245,12 +303,15 @@ def main(argv: list[str] | None = None) -> int:
     modes = ["baseline", "final"] if args.mode == "both" else [args.mode]
     results: dict[str, dict[str, Any]] = {}
     for mode in modes:
-        suffix = "-offline" if args.offline else ""
-        name = args.out or f"{mode}{suffix}"
+        suffix = "-adversarial" if args.adversarial else ("-offline" if args.offline else "")
+        # Each mode gets its own directory even when --out is given, otherwise
+        # running both would have the second mode overwrite the first's metrics.
+        name = f"{args.out}/{mode}" if args.out else f"{mode}{suffix}"
         print(f"\n== {mode} ==")
         results[mode] = run_mode(
             mode, cases, kb, settings,
             offline=args.offline, runs=args.runs, out_name=name,
+            adversarial=args.adversarial,
         )
 
     print("\n" + render_comparison(

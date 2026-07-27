@@ -18,10 +18,10 @@ dist/
 venv/
 env/
 
-# Evaluation output. runs/baseline/ is deliberately tracked: it is the recorded
-# evidence of the pre-hardening failures that motivated the final version.
-runs/*
-!runs/baseline/
+# Ephemeral evaluation output. Curated evidence that the evaluation report cites
+# is committed under artifacts/ instead (set TICKETPILOT_RUNS_DIR=artifacts to
+# write there), so nothing the report references can go missing.
+runs/
 
 # The assignment brief itself — reference material, not project source.
 # Remove this line if you would rather ship it alongside the submission.

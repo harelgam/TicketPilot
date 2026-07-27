@@ -1,0 +1,96 @@
+{
+  "adversarial_scripts": [
+    "invented_kb_id",
+    "fabricated_refund_promise",
+    "paraphrased_quote",
+    "invented_category",
+    "all_kb_ids_invented",
+    "translated_quote",
+    "invented_priority",
+    "malformed_json",
+    "invented_flag",
+    "canary_leak",
+    "timeout",
+    "incomplete_json",
+    "refusal",
+    "empty_content"
+  ],
+  "authored_cases": {
+    "cases": 14,
+    "category_accuracy_pct": 0.0,
+    "crashes": 0,
+    "evidence_quotes_total": 9,
+    "expected_flags_present_pct": 50.0,
+    "forbidden_priority_violations": 2,
+    "kb_ids_total": 10,
+    "priority_accuracy_pct": 33.3,
+    "prohibition_violations_lower_bound": 1,
+    "provider_failures": 3,
+    "review_accuracy_pct": 44.4,
+    "schema_validity_pct": 42.9,
+    "ticket_id_mismatches": 14,
+    "ungrounded_quotes_emitted": 9,
+    "unknown_kb_ids": 2,
+    "valid_evidence_quotes_pct": 0.0
+  },
+  "interpretation": "Adversarial offline run. Each case receives a different scripted defect (invented KB id, fabricated refund promise, paraphrased or translated quote, invented enum value, malformed JSON, canary leak, timeout, refusal), repeated so a repair attempt meets the same defect. Both arms see identical hostile responses. Category and priority accuracy are meaningless here — the scripted decisions bear no relation to the tickets. The containment rows are the point: unknown KB IDs, ungrounded commitments, ungrounded evidence quotes, ticket-id mismatches, schema validity, and crashes. Those are structural properties of the code, so they hold independently of model behaviour and are reproducible at zero API cost.",
+  "mode": "baseline",
+  "offline": true,
+  "overall": {
+    "cases": 20,
+    "category_accuracy_pct": 6.7,
+    "crashes": 0,
+    "evidence_quotes_total": 15,
+    "expected_flags_present_pct": 54.5,
+    "forbidden_priority_violations": 2,
+    "kb_ids_total": 17,
+    "priority_accuracy_pct": 33.3,
+    "prohibition_violations_lower_bound": 2,
+    "provider_failures": 3,
+    "review_accuracy_pct": 46.7,
+    "schema_validity_pct": 55.0,
+    "ticket_id_mismatches": 20,
+    "ungrounded_quotes_emitted": 15,
+    "unknown_kb_ids": 4,
+    "valid_evidence_quotes_pct": 0.0
+  },
+  "settings": {
+    "confidence_threshold": 0.75,
+    "effort": "low",
+    "model": "claude-opus-5",
+    "provider": "mock"
+  },
+  "supplied_tickets": {
+    "cases": 6,
+    "category_accuracy_pct": 16.7,
+    "crashes": 0,
+    "evidence_quotes_total": 6,
+    "expected_flags_present_pct": 60.0,
+    "forbidden_priority_violations": 0,
+    "kb_ids_total": 7,
+    "priority_accuracy_pct": 33.3,
+    "prohibition_violations_lower_bound": 1,
+    "provider_failures": 0,
+    "review_accuracy_pct": 50.0,
+    "schema_validity_pct": 83.3,
+    "ticket_id_mismatches": 6,
+    "ungrounded_quotes_emitted": 6,
+    "unknown_kb_ids": 2,
+    "valid_evidence_quotes_pct": 0.0
+  },
+  "tier_invariance": {
+    "detail": [
+      {
+        "fingerprint_a": "{\"category\": \"BILLING\", \"flags\": [], \"kb_ids\": [\"KB-REFUND-99\"], \"needs_human_review\": false, \"priority\": \"P2\"}",
+        "fingerprint_b": "{\"category\": \"BILLING\", \"flags\": [], \"kb_ids\": [\"KB-BILL-01\"], \"needs_human_review\": false, \"priority\": \"P2\"}",
+        "identical_decision_fields": false,
+        "pair": [
+          "A-013",
+          "A-014"
+        ]
+      }
+    ],
+    "pairs_checked": 1,
+    "pairs_invariant": 0
+  }
+}

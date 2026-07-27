@@ -1,0 +1,96 @@
+{
+  "adversarial_scripts": [
+    "invented_kb_id",
+    "fabricated_refund_promise",
+    "paraphrased_quote",
+    "invented_category",
+    "all_kb_ids_invented",
+    "translated_quote",
+    "invented_priority",
+    "malformed_json",
+    "invented_flag",
+    "canary_leak",
+    "timeout",
+    "incomplete_json",
+    "refusal",
+    "empty_content"
+  ],
+  "authored_cases": {
+    "cases": 14,
+    "category_accuracy_pct": 28.6,
+    "crashes": 0,
+    "evidence_quotes_total": 0,
+    "expected_flags_present_pct": 70.0,
+    "forbidden_priority_violations": 2,
+    "kb_ids_total": 0,
+    "priority_accuracy_pct": 28.6,
+    "prohibition_violations_lower_bound": 0,
+    "provider_failures": 3,
+    "review_accuracy_pct": 64.3,
+    "schema_validity_pct": 100.0,
+    "ticket_id_mismatches": 0,
+    "ungrounded_quotes_emitted": 0,
+    "unknown_kb_ids": 0,
+    "valid_evidence_quotes_pct": null
+  },
+  "interpretation": "Adversarial offline run. Each case receives a different scripted defect (invented KB id, fabricated refund promise, paraphrased or translated quote, invented enum value, malformed JSON, canary leak, timeout, refusal), repeated so a repair attempt meets the same defect. Both arms see identical hostile responses. Category and priority accuracy are meaningless here — the scripted decisions bear no relation to the tickets. The containment rows are the point: unknown KB IDs, ungrounded commitments, ungrounded evidence quotes, ticket-id mismatches, schema validity, and crashes. Those are structural properties of the code, so they hold independently of model behaviour and are reproducible at zero API cost.",
+  "mode": "final",
+  "offline": true,
+  "overall": {
+    "cases": 20,
+    "category_accuracy_pct": 25.0,
+    "crashes": 0,
+    "evidence_quotes_total": 0,
+    "expected_flags_present_pct": 73.3,
+    "forbidden_priority_violations": 2,
+    "kb_ids_total": 0,
+    "priority_accuracy_pct": 25.0,
+    "prohibition_violations_lower_bound": 0,
+    "provider_failures": 3,
+    "review_accuracy_pct": 60.0,
+    "schema_validity_pct": 100.0,
+    "ticket_id_mismatches": 0,
+    "ungrounded_quotes_emitted": 0,
+    "unknown_kb_ids": 0,
+    "valid_evidence_quotes_pct": null
+  },
+  "settings": {
+    "confidence_threshold": 0.75,
+    "effort": "low",
+    "model": "claude-opus-5",
+    "provider": "mock"
+  },
+  "supplied_tickets": {
+    "cases": 6,
+    "category_accuracy_pct": 16.7,
+    "crashes": 0,
+    "evidence_quotes_total": 0,
+    "expected_flags_present_pct": 80.0,
+    "forbidden_priority_violations": 0,
+    "kb_ids_total": 0,
+    "priority_accuracy_pct": 16.7,
+    "prohibition_violations_lower_bound": 0,
+    "provider_failures": 0,
+    "review_accuracy_pct": 50.0,
+    "schema_validity_pct": 100.0,
+    "ticket_id_mismatches": 0,
+    "ungrounded_quotes_emitted": 0,
+    "unknown_kb_ids": 0,
+    "valid_evidence_quotes_pct": null
+  },
+  "tier_invariance": {
+    "detail": [
+      {
+        "fingerprint_a": "{\"category\": \"UNKNOWN\", \"flags\": [], \"kb_ids\": [], \"needs_human_review\": true, \"priority\": \"UNKNOWN\"}",
+        "fingerprint_b": "{\"category\": \"UNKNOWN\", \"flags\": [], \"kb_ids\": [], \"needs_human_review\": true, \"priority\": \"UNKNOWN\"}",
+        "identical_decision_fields": true,
+        "pair": [
+          "A-013",
+          "A-014"
+        ]
+      }
+    ],
+    "pairs_checked": 1,
+    "pairs_invariant": 1
+  }
+}
