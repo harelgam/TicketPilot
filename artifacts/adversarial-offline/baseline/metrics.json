@@ -30,7 +30,7 @@
     "schema_validity_pct": 42.9,
     "ticket_id_mismatches": 14,
     "ungrounded_quotes_emitted": 9,
-    "unknown_kb_ids": 2,
+    "unknown_kb_ids": 3,
     "valid_evidence_quotes_pct": 0.0
   },
   "interpretation": "Adversarial offline run. Each case receives a different scripted defect (invented KB id, fabricated refund promise, paraphrased or translated quote, invented enum value, malformed JSON, canary leak, timeout, refusal), repeated so a repair attempt meets the same defect. Both arms see identical hostile responses. Category and priority accuracy are meaningless here — the scripted decisions bear no relation to the tickets. The containment rows are the point: unknown KB IDs, ungrounded commitments, ungrounded evidence quotes, ticket-id mismatches, schema validity, and crashes. Those are structural properties of the code, so they hold independently of model behaviour and are reproducible at zero API cost.",
@@ -51,7 +51,7 @@
     "schema_validity_pct": 55.0,
     "ticket_id_mismatches": 20,
     "ungrounded_quotes_emitted": 15,
-    "unknown_kb_ids": 4,
+    "unknown_kb_ids": 5,
     "valid_evidence_quotes_pct": 0.0
   },
   "settings": {
@@ -82,8 +82,8 @@
     "detail": [
       {
         "fingerprint_a": "{\"category\": \"BILLING\", \"flags\": [], \"kb_ids\": [\"KB-REFUND-99\"], \"needs_human_review\": false, \"priority\": \"P2\"}",
-        "fingerprint_b": "{\"category\": \"BILLING\", \"flags\": [], \"kb_ids\": [\"KB-BILL-01\"], \"needs_human_review\": false, \"priority\": \"P2\"}",
-        "identical_decision_fields": false,
+        "fingerprint_b": "{\"category\": \"BILLING\", \"flags\": [], \"kb_ids\": [\"KB-REFUND-99\"], \"needs_human_review\": false, \"priority\": \"P2\"}",
+        "identical_decision_fields": true,
         "pair": [
           "A-013",
           "A-014"
@@ -91,6 +91,6 @@
       }
     ],
     "pairs_checked": 1,
-    "pairs_invariant": 0
+    "pairs_invariant": 1
   }
 }

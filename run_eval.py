@@ -72,18 +72,48 @@ ADVERSARIAL_SCRIPTS = (
 )
 
 
-def _make_provider(offline: bool, settings: Settings, script_index: int | None = None):
+def build_adversarial_map(cases: list[EvalCase]) -> dict[str, Script]:
+    """Assign one defect per *distinct ticket text*, cycling for even coverage.
+
+    Two properties are needed at once, and the obvious approaches each break one:
+
+    * Indexing by case position gives even coverage but hands the tier-invariance
+      pair two different defects, so its two halves diverge for a reason that has
+      nothing to do with tier — a spurious invariance failure.
+    * Hashing the text keeps that pair aligned but distributes unevenly, leaving
+      some defects unassigned and their metric rows showing 0 -> 0, which
+      demonstrates nothing.
+
+    Keying on distinct text and cycling in first-appearance order satisfies both:
+    identical text always gets an identical response, and every defect in the list
+    is exercised as long as there are enough distinct tickets.
+    """
+    mapping: dict[str, Script] = {}
+    for case in cases:
+        if case.ticket.text not in mapping:
+            mapping[case.ticket.text] = ADVERSARIAL_SCRIPTS[
+                len(mapping) % len(ADVERSARIAL_SCRIPTS)
+            ]
+    return mapping
+
+
+def _make_provider(
+    offline: bool,
+    settings: Settings,
+    case: EvalCase | None = None,
+    adversarial_map: dict[str, Script] | None = None,
+):
     """Build the provider for one case.
 
-    ``script_index`` selects an adversarial script, cycling so that every case in
-    the set meets a different defect. This is what makes the containment claims
-    measurable without spending anything on the API: the same hostile responses go
-    to both arms, and the metrics show how many reach the output.
+    Passing ``case`` and ``adversarial_map`` selects a scripted defect. This is
+    what makes the containment claims measurable without spending anything on the
+    API: both arms receive identical hostile responses, and the metrics show how
+    many reach the output.
     """
     if offline:
-        if script_index is None:
+        if case is None or adversarial_map is None:
             return MockProvider()
-        script = ADVERSARIAL_SCRIPTS[script_index % len(ADVERSARIAL_SCRIPTS)]
+        script = adversarial_map[case.ticket.text]
         # Repeated so a repair attempt meets the same defect: a defect that
         # vanishes on retry would overstate the final version's containment.
         return MockProvider([script, script])
@@ -180,11 +210,13 @@ def run_mode(
     all_scores: list[CaseScore] = []
     fingerprints: dict[str, list[str]] = defaultdict(list)
 
-    for case_index, case in enumerate(cases):
+    adversarial_map = build_adversarial_map(cases) if adversarial else None
+
+    for case in cases:
         repeats = runs if (runs > 1 and case.ticket.ticket_id in STABILITY_TICKETS) else 1
         for index in range(repeats):
             provider = _make_provider(
-                offline, settings, case_index if adversarial else None
+                offline, settings, case if adversarial else None, adversarial_map
             )
             try:
                 if mode == "baseline":
