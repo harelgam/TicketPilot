@@ -95,7 +95,7 @@ class EvidenceItem(BaseModel):
     validated, which is what section 3 requires.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     quote: str = Field(min_length=1)
     supports: list[str] = Field(min_length=1)
@@ -126,9 +126,15 @@ class ModelTriageOutput(BaseModel):
     ``recommended_action.text``
         Assembled from trusted KB content; the model proposes only which
         articles apply, via ``kb_ids`` (A8).
+
+    ``extra="ignore"`` rather than ``"forbid"``: if the model volunteers a
+    field we did not ask for — most plausibly a ``recommended_action`` with
+    prose it wrote itself — the right response is to drop it silently, not to
+    fail validation and spend the repair call. Dropping is also precisely the
+    behaviour that keeps fabricated action text out of the response.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     category: Category
     priority: Priority

@@ -20,7 +20,10 @@ from pathlib import Path
 # stability comes from schema constraints plus the deterministic post-layer.
 DEFAULT_MODEL = "claude-opus-5"
 DEFAULT_EFFORT = "low"
-DEFAULT_MAX_TOKENS = 4096
+# Headroom matters: max_tokens caps thinking *plus* response text, and thinking
+# is on by default on Opus 5. A tight ceiling truncates the JSON body mid-object,
+# which surfaces as an inexplicable parse failure rather than an obvious limit.
+DEFAULT_MAX_TOKENS = 8192
 DEFAULT_TIMEOUT_SECONDS = 60.0
 
 # Initial value only. The final threshold is selected from evaluation data and
