@@ -16,7 +16,6 @@
       "type": "string"
     },
     "EvidenceItem": {
-      "additionalProperties": false,
       "description": "A quote from the ticket plus what it supports.\n\n``quote`` must be an exact substring of the original ticket text; that is\nenforced in ``validation.py``, not here, because Pydantic has no access to\nthe source ticket.\n\n``supports`` is intentionally unconstrained. The assignment illustrates\n``[\"category\", \"priority\"]`` but never defines a closed vocabulary for it,\nso constraining it would invent a requirement — and would spend repair\ncalls rejecting values that are not actually invalid. Only the quote is\nvalidated, which is what section 3 requires.",
       "properties": {
         "quote": {
@@ -64,8 +63,7 @@
       "type": "string"
     }
   },
-  "additionalProperties": false,
-  "description": "What the LLM is asked to return.\n\nDeliberately absent:\n\n``ticket_id``\n    Application-owned metadata, copied from the input (A0).\n``recommended_action.text``\n    Assembled from trusted KB content; the model proposes only which\n    articles apply, via ``kb_ids`` (A8).",
+  "description": "What the LLM is asked to return.\n\nDeliberately absent:\n\n``ticket_id``\n    Application-owned metadata, copied from the input (A0).\n``recommended_action.text``\n    Assembled from trusted KB content; the model proposes only which\n    articles apply, via ``kb_ids`` (A8).\n\n``extra=\"ignore\"`` rather than ``\"forbid\"``: if the model volunteers a\nfield we did not ask for — most plausibly a ``recommended_action`` with\nprose it wrote itself — the right response is to drop it silently, not to\nfail validation and spend the repair call. Dropping is also precisely the\nbehaviour that keeps fabricated action text out of the response.\n\nEvery field is **required**, including the list-valued ones. A default would\nlet an incomplete response validate: Pydantic would quietly substitute an\nempty list, so a response that simply *omitted* ``evidence`` would be\nindistinguishable from one that legitimately found no quotable evidence.\nThose are different situations and only one of them should reach the output.\nRequiring the fields means an incomplete response fails validation and earns\nthe repair call, which is the point of having one.\n\nThe lists may still be *empty*; they may not be *absent*. Because the request\nis schema-constrained, \"required\" is also enforced at generation time rather\nthan only on the way back.",
   "properties": {
     "category": {
       "$ref": "#/$defs/Category"
@@ -114,8 +112,11 @@
     "category",
     "priority",
     "summary",
+    "evidence",
+    "kb_ids",
     "confidence",
-    "needs_human_review"
+    "needs_human_review",
+    "flags"
   ],
   "title": "ModelTriageOutput",
   "type": "object"

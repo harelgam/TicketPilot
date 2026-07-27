@@ -8,6 +8,17 @@ regenerating them is how they stay in step with ``models.py``. Run:
 Two schemas are emitted because the model's output contract and the service's
 response contract are deliberately different objects (see README A0 and A8):
 the model never produces ``ticket_id`` or the recommended-action text.
+
+These files document the **Pydantic models**, not the bytes sent to the API. The
+SDK applies its own transform before transmission — notably re-adding
+``additionalProperties: false``, which ``model_json_schema()`` omits because
+``ModelTriageOutput`` uses ``extra="ignore"``. Both are correct for their purpose:
+the wire schema constrains generation, while ``extra="ignore"`` governs what
+happens to an unexpected field that arrives by some other route (the baseline
+path, or a provider that does not enforce the schema).
+
+``tests/test_schemas.py`` asserts these files stay in step with the models. They
+were stale once, describing a contract the code no longer implemented.
 """
 
 from __future__ import annotations

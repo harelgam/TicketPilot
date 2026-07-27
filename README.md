@@ -11,11 +11,12 @@ and enforced by code. A model failure or an injected instruction degrades the
 result into a reviewable abstention rather than an authoritative-looking
 fabrication.
 
-> **Evaluation status:** the API budget for this project was one call, so the
-> baseline-to-final *accuracy* comparison is not populated. Containment of hostile
-> and malformed model output **is** measured, reproducibly, at zero cost. See
-> [`evaluation_report.md`](evaluation_report.md), which states plainly what was
-> measured and what was not.
+> **Evaluation status:** the real integration is **verified** — one live call, every
+> invariant held (`artifacts/live-verification.json`). Containment of hostile and
+> malformed model output is **measured** reproducibly at zero cost. The
+> baseline-to-final *accuracy* comparison is **not populated**, because the API
+> budget was one call. See [`evaluation_report.md`](evaluation_report.md), which
+> states plainly what was measured and what was not.
 
 ---
 
@@ -87,15 +88,26 @@ invariant checks, token usage, and an upper-bound cost estimate.
 # Containment comparison, no API key, no cost:
 python run_eval.py --mode both --cases all --offline --adversarial
 
-# Full accuracy comparison against the real API (~46 calls, under $1):
+# Full accuracy comparison against the real API (~46 calls, ~$0.40 measured):
 python run_eval.py --mode both --cases all --runs 3
 ```
 
 ### Run the tests
 
 ```bash
-python -m pytest        # 295 tests, all offline
+python -m pytest        # 309 tests, all offline
 ```
+
+### Regenerate the JSON schemas
+
+`schemas/` is a generated artifact. After changing anything in `models.py`:
+
+```bash
+python scripts/generate_schemas.py
+```
+
+`tests/test_schemas.py` fails if the committed files drift from the models, so this
+cannot be forgotten silently.
 
 ---
 

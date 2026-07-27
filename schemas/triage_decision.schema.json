@@ -16,7 +16,6 @@
       "type": "string"
     },
     "EvidenceItem": {
-      "additionalProperties": false,
       "description": "A quote from the ticket plus what it supports.\n\n``quote`` must be an exact substring of the original ticket text; that is\nenforced in ``validation.py``, not here, because Pydantic has no access to\nthe source ticket.\n\n``supports`` is intentionally unconstrained. The assignment illustrates\n``[\"category\", \"priority\"]`` but never defines a closed vocabulary for it,\nso constraining it would invent a requirement — and would spend repair\ncalls rejecting values that are not actually invalid. Only the quote is\nvalidated, which is what section 3 requires.",
       "properties": {
         "quote": {
@@ -81,7 +80,8 @@
         }
       },
       "required": [
-        "text"
+        "text",
+        "kb_ids"
       ],
       "title": "RecommendedAction",
       "type": "object"

@@ -113,7 +113,10 @@ class RecommendedAction(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(min_length=1)
-    kb_ids: list[str] = Field(default_factory=list)
+    # Required, not defaulted. The assignment lists kb_ids as part of the output
+    # structure, so it must be present even when empty. A default would make it
+    # optional in the published schema.
+    kb_ids: list[str]
 
 
 class ModelTriageOutput(BaseModel):
@@ -132,6 +135,18 @@ class ModelTriageOutput(BaseModel):
     prose it wrote itself — the right response is to drop it silently, not to
     fail validation and spend the repair call. Dropping is also precisely the
     behaviour that keeps fabricated action text out of the response.
+
+    Every field is **required**, including the list-valued ones. A default would
+    let an incomplete response validate: Pydantic would quietly substitute an
+    empty list, so a response that simply *omitted* ``evidence`` would be
+    indistinguishable from one that legitimately found no quotable evidence.
+    Those are different situations and only one of them should reach the output.
+    Requiring the fields means an incomplete response fails validation and earns
+    the repair call, which is the point of having one.
+
+    The lists may still be *empty*; they may not be *absent*. Because the request
+    is schema-constrained, "required" is also enforced at generation time rather
+    than only on the way back.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -139,11 +154,11 @@ class ModelTriageOutput(BaseModel):
     category: Category
     priority: Priority
     summary: str = Field(min_length=1)
-    evidence: list[EvidenceItem] = Field(default_factory=list)
-    kb_ids: list[str] = Field(default_factory=list)
+    evidence: list[EvidenceItem]
+    kb_ids: list[str]
     confidence: float = Field(ge=0.0, le=1.0)
     needs_human_review: bool
-    flags: list[Flag] = Field(default_factory=list)
+    flags: list[Flag]
 
 
 class TriageDecision(BaseModel):

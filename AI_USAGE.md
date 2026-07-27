@@ -126,6 +126,27 @@ act as" / "acts as" / "acting as" mid-sentence. The pattern is now anchored to a
 clause boundary, with politeness words allowed after it so "Please act as…" still
 matches. The offending string is a permanent regression case.
 
+**Two defects a reviewer found that my tests did not cover.** Both are worth
+recording because they share a cause — I had tested behaviour thoroughly and left
+two *artifacts* of that behaviour unguarded:
+
+- **The committed JSON schemas were stale.** `schemas/` is generated from
+  `models.py`, and it had been generated before `ModelTriageOutput` changed from
+  `extra="forbid"` to `extra="ignore"`. The committed files still advertised
+  `additionalProperties: false` and carried outdated descriptions. Found by
+  re-running the generator and diffing. A generated artifact that is committed
+  needs a test asserting it is current, or it rots silently;
+  `tests/test_schemas.py` now compares each file to `model_json_schema()` and I
+  confirmed it fails against the stale versions before regenerating.
+- **`evidence`, `kb_ids`, and `flags` were optional when they should be required.**
+  With `default_factory=list`, a response that *omitted* them validated and
+  Pydantic substituted empty lists — so an incomplete response looked identical to
+  a complete one that genuinely had nothing to report, and it skipped the repair it
+  should have earned. This is the subtler of the two: every test I had written
+  passed, because they all supplied complete payloads. The fix makes the fields
+  required (empty is fine, absent is not), which the schema-constrained request now
+  also enforces at generation time.
+
 **A dependency that was declared and never used.** `python-dotenv` was in
 `requirements.txt` and `pyproject.toml`, and nothing anywhere called
 `load_dotenv()`. A key placed in `.env` would have been silently ignored and shown
