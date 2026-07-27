@@ -11,13 +11,17 @@ and enforced by code. A model failure or an injected instruction degrades the
 result into a reviewable abstention rather than an authoritative-looking
 fabrication.
 
-> **Evaluation status: complete.** Full baseline-to-final comparison against the
-> real API — 20 cases × 2 arms plus 3×3 stability, 51 calls, $1.09. Priority accuracy
-> 85% → 100%, required flags 73% → 100%, stability 67% → 100%. The baseline showed an
-> observed tier-invariance failure on one paired case; see the report, which also
-> records four safeguards the run never exercised, one expected label of mine that
-> was wrong, and a prompt-cache bug of mine that made the final arm cost 2.7× the
-> baseline.
+> **Evaluation status: complete, with a mixed result.** Full baseline-to-final
+> comparison against the real API — 20 cases × 2 arms plus 3×3 stability, 51 calls,
+> $1.09. The final version is better on priority accuracy (85% → 95%), required-flag
+> recall (67% → 93%), self-consistency (5 → 0 self-contradictory decisions) and
+> stability (67% → 100%); and **worse** on review accuracy (100% → 95%, one
+> over-escalation) and one forbidden-priority violation the baseline got right.
+>
+> A manual semantic review found problems no automated metric caught: assembled action
+> text is always KB-grounded but context-insensitive in 6 of 20 cases, one flag is a
+> false positive, and one summary states a detail the ticket does not support. See
+> [`evaluation_report.md`](evaluation_report.md).
 
 ---
 
@@ -287,49 +291,65 @@ contradicting prose is still ungrounded, and detecting that in free text does no
 work: a keyword check also rejects the correct sentence, because compliant text
 restates the prohibition. Details in [`AI_USAGE.md`](AI_USAGE.md).
 
+**The measured cost of that choice.** The live run shows this is a real trade-off, not
+a free win. Assembled text was grounded in every case but context-insensitive in 6 of
+20 — asking for an invoice ID the ticket supplies, or opening with a slow-export
+condition when the export never completes. The baseline's model-written text read
+better on those same cases, but invented remediation steps absent from `KB-SEC-01` on
+two others. Documented rather than fixed, because changing assembly would invalidate
+the reported evaluation.
+
 ---
 
 ## Known limitations and failure modes
 
-1. **A plausible-but-wrong classification passes every check.** The live run makes
-   this concrete: category accuracy was 100% for *both* arms, so nothing measured
-   here distinguishes a right category from a wrong one. The checks verify legality,
-   grounding, and KB support. Largest residual risk, and the reason `SECURITY` and
-   P0/P1 force review unconditionally.
-2. **The injection detector is evadable.** A test asserts an unlisted paraphrase
-   slips through. Containment rests on the deterministic layer, not detection.
-3. **Action text is templated, not tailored.** It may ask for information the ticket
-   already supplied — observed in the live run.
-4. **Accuracy and stability were measured on only 20 cases and three stability
+1. **The automated scorer does not read the output.** It checks structure and label
+   agreement. A manual review found context-insensitive action text, a false-positive
+   flag, and an unsupported summary detail — none of which any metric caught. The
+   headline numbers are a floor on quality problems, not a ceiling.
+2. **The summary is unvalidated.** Evidence quotes are checked character-for-character;
+   the summary is not checked at all, though §3 requires it to be factual. A-006 shows
+   an unsupported detail ("committed" where the ticket says "uploaded") surviving
+   alongside 100% exact evidence.
+3. **Flag precision and action relevance are not measured.** The flag metric is
+   inclusion-only; action grounding is guaranteed by construction while relevance is
+   not, and 6 of 20 cases show redundant or irrelevant steps.
+4. **A plausible-but-wrong classification passes every check.** Category accuracy was
+   100% for *both* arms, so nothing measured here distinguishes a right category from a
+   wrong one. Largest residual risk, and the reason `SECURITY` and P0/P1 force review
+   unconditionally.
+5. **Accuracy and stability were measured on only 20 cases and three stability
    tickets, and tier invariance on a single pair. The results are indicative, not
    statistically conclusive.**
-5. **The confidence threshold is inert at 0.75.** No case in the live run was
-   reviewed solely on confidence, so the threshold could be raised substantially or
-   dropped to zero without changing an outcome. Choosing it from data needs cases
-   where confidence is the deciding signal, which this set lacks.
-6. **One repair attempt is a reasoned assumption.** Schema-constrained output needed
+6. **The injection detector is evadable.** A test asserts an unlisted paraphrase slips
+   through. Containment rests on the deterministic layer, not detection.
+7. **The confidence threshold is inert at 0.75.** No case in the live run was reviewed
+   solely on confidence, so it could be raised substantially or dropped to zero without
+   changing an outcome. Choosing it from data needs cases where confidence decides,
+   which this set lacks.
+8. **One repair attempt is a reasoned assumption.** Schema-constrained output needed
    almost no repairs, so it remains largely untested.
-7. **`supports` is unvalidated** — the assignment defines no vocabulary for it.
-8. **Hebrew detector coverage is thinner than English.** A Hebrew paraphrase is more
-   likely to evade the Layer-2 detector.
-9. **Four safeguards were never exercised by the real model.** The `ticket_id`
-   protection, KB-ID allowlist, evidence check, and action assembly all measured
-   0 → 0 in the live run. Their measured value comes from the adversarial tests, so
-   the live sample alone cannot justify their complexity.
+9. **`supports` is unvalidated** — the assignment defines no vocabulary for it.
+10. **Hebrew detector coverage is thinner than English.** A Hebrew paraphrase is more
+    likely to evade the Layer-2 detector.
+11. **Three safeguards were never exercised by the real model.** The `ticket_id`
+    protection, KB-ID allowlist, and evidence check all measured 0 → 0 in the live run.
+    Their measured value comes from the adversarial tests, so the live sample alone
+    cannot justify their complexity.
 
 ## What I would do next, in priority order
 
-1. **Repeat the tier-invariance experiment properly.** Run each tier several times in
-   alternating order and compare distributions. The current single paired observation
-   cannot separate a tier effect from the run-to-run variance the baseline also
-   showed.
-2. **Expand the evaluation set**, particularly cases where confidence is the
-   deciding review signal, so the threshold can be chosen from data.
-3. **Attack the plausible-but-wrong failure** — an entailment check that the
-   `summary` and `category` follow from the quoted evidence, behind an optional flag.
-4. **Calibrate confidence** against outcomes rather than self-report.
-5. **Model-authored action text with semantic grounding validation**, to recover
-   ticket-specific wording without reintroducing fabrication.
+1. **Add semantic metrics** — flag precision, action relevance, and a
+   summary-entailment check. The manual review found more real problems than the whole
+   automated suite; that gap should close before anything else is added.
+2. **Repeat the tier-invariance experiment** with counterbalanced repeated pairs, so a
+   tier effect can be separated from the run-to-run variance the baseline also showed.
+3. **Make action assembly context-aware** — select applicable steps within an article,
+   or return to model-authored text gated behind an entailment check against the KB.
+   Not changed now, because it would invalidate the reported evaluation.
+4. **Expand the case set**, particularly cases where confidence is the deciding review
+   signal, so the threshold can be chosen from data.
+5. **Calibrate confidence** against outcomes rather than self-report.
 6. **Widen Hebrew detector coverage** from real ticket data rather than invented
    phrasings.
 7. **An HTTP surface** if this became a service; the pipeline is already a pure

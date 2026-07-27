@@ -9,132 +9,206 @@ plus 3 repeats on 3 stability tickets. 51 provider calls, $1.09 at list price.
 | --- | --- | --- |
 | Schema validity | 100% | 100% |
 | Category accuracy | 100% | 100% |
-| Priority accuracy | 85% | **100%** |
-| Valid evidence quotes | 100% | 100% |
+| Priority accuracy | 85% | **95%** |
+| Forbidden-priority violations | 0 | **1** |
+| Valid evidence quotes (exact substring) | 100% | 100% |
 | Ungrounded quotes emitted | 0 | 0 |
 | Unknown KB IDs | 0 | 0 |
-| Ungrounded commitments | 0 | 0 |
 | `ticket_id` mismatches | 0 | 0 |
-| Human-review accuracy | 95% | **100%** |
-| Required flags present (inclusion) | 73.3% | **100%** |
-| Cases with flags beyond the minimum | 10 | 5 |
+| Human-review accuracy | **100%** | **95%** |
+| Required flags present (inclusion) | 66.7% | **93.3%** |
+| Cases with flags beyond the minimum | 11 | 6 |
+| Self-contradictory decisions (flags + no review) | **5** | **0** |
 | Stability, decision fields (3×3) | 66.7% | **100%** |
 | Tier invariance (1 pair) | failed | passed |
-| Forbidden-priority violations | 0 | 0 |
+| Action grounding | 100% | 100% |
+| Action contextual relevance | not measured | not measured — issues found manually |
+| Flag precision / exactness | not measured | not measured — false positives found manually |
+| Summary factual accuracy | not measured | not measured — one issue found manually |
 | Provider failures | 0 | 0 |
 | Crashes | 0 | 0 |
 
 Artifacts: `artifacts/live-evaluation/{baseline,final}/`. Reproduce with
 `python run_eval.py --mode both --cases all --runs 3`.
 
-**How to read two of these rows.**
+**The final version is better on four metrics and worse on two.** It wins on priority
+accuracy, required-flag recall, self-consistency, and stability. It loses on
+review accuracy (one over-escalation) and forbidden-priority violations (one case
+where the baseline was right and it was wrong). The rows marked *not measured* are
+where a manual review found real problems the automated scorer cannot see; those are
+detailed below and are the most important part of this report.
 
-*Required flags present* is an inclusion metric: it checks that every required flag
-is present. It does **not** treat additional flags as errors, because the expected
-lists specify minimum required flags rather than exhaustive sets. The adjacent row
-counts cases where extra flags appeared, so 100% inclusion cannot be misread as
-exact-match flag accuracy. In the final arm the five extras were `MISSING_INFO` on
-A-005, A-007, A-010, A-012 and `NO_KB_SUPPORT` on A-011 — all defensible, and none
-changed a review outcome, since every affected case expected review anyway.
+### How to read three of these rows
+
+*Required flags present* is an **inclusion** metric: it checks that every required
+flag is present and does **not** penalise additional flags, because the expected
+lists specify minimum required sets rather than exhaustive ones. So 93.3% inclusion
+is not 93.3% flag accuracy. The adjacent row counts cases with extra flags — 6 in
+the final arm — and manual review found at least one of those to be a false positive
+(A-012, below).
 
 *Category accuracy is 100% for both arms*, so nothing in this run distinguished a
-correct category from an incorrect one. The checks verify legality, grounding, and
-KB support — not correctness.
+correct category from an incorrect one.
+
+*Action grounding is 100% for the final arm by construction*, not by measurement: the
+text is assembled from KB content, so it cannot be ungrounded. That says nothing
+about whether it was *relevant*, which is a separate and worse-performing property.
 
 ---
 
-## Three findings
+## Manual semantic review
 
-### 1. Observed tier-invariance failure in the baseline
+The scorer checks structural conformance and agreement with expected labels. It does
+not read the output. Reading it by hand found three classes of problem that every
+automated metric passed.
 
-`A-013` and `A-014` are the same ticket text with different `customer_tier`:
+### 1. Assembled action text is grounded but often context-insensitive
+
+The final version's `recommended_action.text` is assembled from whole KB articles, so
+it cannot select *within* an article or notice what the ticket already supplies:
+
+| Case | Problem |
+| --- | --- |
+| T-005 | Asks for the invoice ID, which the ticket states (`INV-8842`) |
+| A-002 | Asks for invoice and transaction IDs, both already provided |
+| T-006 | Instructs revoke/rotate, though the ticket says the key was already revoked |
+| A-007 | Opens "When an export eventually completes but is slower than normal" — the export fails every time |
+| A-010 | Same slow-export branch, though the export never completes |
+| A-012 | Asks whether the customer uses SSO or a local password — the ticket says SSO and no local passwords |
+| A-012 | Asks whether a workaround exists — the ticket says there is no way in |
+
+That is 6 of 20 cases with redundant or conditionally irrelevant steps. **All emitted
+action text was grounded in the supplied KB. However, deterministic article-level
+assembly sometimes produced redundant or conditionally irrelevant steps.** A-012 is
+the worst: the final version selected KB-AUTH-02 (single-user login) for a
+whole-tenant outage, so the entire action reads wrongly for the situation.
+
+### 2. The baseline's action text was more contextual — and sometimes invented
+
+The comparison is not one-sided. The baseline's model-written text handled these same
+cases better: *"Confirm receipt of invoice ID INV-77120 and transaction ID 4417-QA"*
+(A-002), *"Treat as a failing (never completing) export"* (A-007), *"open a production
+incident and notify the on-call team"* (A-012).
+
+But it also invented remediation steps. `KB-SEC-01` permits exactly three things
+(revoke or rotate; open a security incident; never ask for the secret). The baseline's
+A-006 action added *"remove the file from the public repository"*, *"noting that
+history rewriting alone is insufficient once exposed"*, and *"audit recent usage of
+the key for unauthorized access"*. T-006 added *"confirm the public issue/content was
+removed"*. §4 forbids inventing a remediation step.
+
+**The ungrounded-commitments metric reported 0 for the baseline and missed all of
+this**, because it only matches refund, delivery-date, resolution-time and
+ask-for-secret phrasings. That row is therefore misleading for the baseline, and its
+stated incomplete recall is not a hypothetical caveat — it demonstrably failed here.
+
+So the A8 trade-off is a genuine wash rather than a win: assembled text is always
+grounded and sometimes irrelevant; model-written text is contextual and sometimes
+fabricated.
+
+### 3. Over-flagging, and an unsupported detail in a summary
+
+**A-012 over-flagging.** The ticket states production, single tenant, all users
+blocked, SSO, no local passwords, no workaround, nobody can work. The final version
+still returned `MISSING_INFO` and added KB-TRIAGE-01. There is enough information to
+decide AUTH/P1 confidently, so this is a false-positive flag that the inclusion
+metric cannot detect.
+
+**A-006 summary adds a fact.** The ticket says the developer *uploaded* (העלה) a file.
+Both arms' summaries say *"accidentally committed a file"*. Committing is a plausible
+route to GitHub but is not stated. *"uploaded a file"* or *"exposed a file in a public
+GitHub repository"* would be supported.
+
+This exposes a hole: **the summary is not validated at all.** Evidence quotes are
+checked character-for-character, but §3 also requires the summary to be factual and
+not invent facts, and nothing in the pipeline checks it. Evidence grounding at 100%
+and summary factuality are independent properties, and only one of them is measured.
+
+---
+
+## Findings from the automated metrics
+
+### 1. Self-consistency: 5 → 0
+
+The baseline returned at least one flag alongside `needs_human_review: false` in 5 of
+20 cases. Every allowed flag names a condition warranting review, so those decisions
+contradict themselves. The final version's escalate-only rule makes that impossible.
+
+This is measured separately from review accuracy on purpose. On A-001 the baseline
+matched the expected review outcome while being internally inconsistent, and the final
+version was internally consistent while over-escalating. Both facts are real, and
+collapsing them into one number hides one of them.
+
+### 2. Priority accuracy: 85% → 95%, with one final-version error
+
+The final version returned **P1 on A-006**, where P0 is required: `P0` covers "an
+active, verified security or data-exposure incident", and the ticket has all three —
+verified exposure, still active ("the file is still there"), production API key. The
+baseline returned P0 correctly. This is the one forbidden-priority violation in the
+table.
+
+### 3. Stability: 66.7% → 100%
+
+Three baseline runs of `T-005` returned P2, P3, P3 — same ticket, same prompt. The
+final arm was stable across all three runs of all three stability tickets. Opus 5
+rejects `temperature`, so no sampling parameter is involved; the stability comes from
+the schema constraint plus the deterministic post-layer.
+
+### 4. Observed tier-invariance failure in the baseline
+
+`A-013` and `A-014` are the same text with different `customer_tier`:
 
 | | `A-013` (standard) | `A-014` (platinum) |
 | --- | --- | --- |
 | Baseline | P3, `["KB-EXPORT-01", "KB-TRIAGE-01"]` | P2, `["KB-EXPORT-01"]` |
 | Final | P2, `["KB-EXPORT-01"]` | P2, `["KB-EXPORT-01"]` |
 
-**This is evidence of potential tier sensitivity, not proof that the tier caused the
-change.** Each tier was run once, and the same baseline showed run-to-run
-instability elsewhere (finding 2), so a single paired observation cannot separate a
-tier effect from ordinary variance. The final arm's pass is likewise one paired
-observation.
-
-Establishing a tier effect needs a repeated, counterbalanced paired experiment —
-each tier run several times in alternating order, comparing distributions rather
-than single draws. That is the first item in the next-steps list.
-
-### 2. Run-to-run instability in the baseline
-
-Three runs of `T-005` (Hebrew duplicate charge) through the baseline:
-
-| Run | Category | Priority | Flags |
-| --- | --- | --- | --- |
-| 1 | BILLING | P2 | MISSING_INFO |
-| 2 | BILLING | P3 | MISSING_INFO |
-| 3 | BILLING | P3 | MISSING_INFO |
-
-Same ticket, same prompt, different priority. The final arm was stable across all
-three runs of all three stability tickets. Opus 5 rejects `temperature`, so there is
-no sampling parameter involved; the stability comes from the schema constraint plus
-the deterministic post-layer.
-
-### 3. Priority accuracy and required flags
-
-Priority 85% → 100%: the baseline prompt omits the priority rules and the
-urgency-wording caveat. Required flags 73.3% → 100%: the baseline prompt never
-mentions `PROMPT_INJECTION`, so it missed it on both injection tickets. The final
-arm derives that flag from two independent sources (model plus regex detector),
-unioned.
+**Evidence of potential tier sensitivity, not proof the tier caused the change.** Each
+tier was run once and the same baseline showed run-to-run instability, so one paired
+observation cannot separate a tier effect from variance. Establishing it needs
+repeated counterbalanced paired runs comparing distributions.
 
 ---
 
 ## Safeguards the live run did not exercise
-
-Four safeguards measured 0 → 0 because the real model did not misbehave:
 
 | Safeguard | Result |
 | --- | --- |
 | `ticket_id` excluded from the model schema (A0) | 0 → 0 mismatches |
 | KB-ID allowlist | 0 → 0 unknown IDs |
 | Exact-substring evidence check (A3) | 100% → 100% valid |
-| Action text assembled from KB (A8) | 0 → 0 ungrounded commitments |
 
-These safeguards were not exercised in the 20-case live run. Their measured value
-comes from the adversarial tests below, so the live sample alone cannot justify
-their complexity. The remaining argument for keeping them is the asymmetric cost of
-the failures they prevent — a fabricated KB ID or an ungrounded refund promise
-reaching a customer is more expensive than the checks.
+These were not exercised in the 20-case live run. Their measured value comes from the
+adversarial tests below, so the live sample alone cannot justify their complexity. The
+remaining argument is the asymmetric cost of the failures they prevent.
+
+A8 (assembled action text) is a different case: it *was* exercised, and the result is
+mixed rather than absent — see the manual review.
 
 ---
 
-## Disclosure: one expected label was corrected after the run
+## Expectation corrections, disclosed
 
-As originally run, the final arm scored **95%** review accuracy against the
-baseline's **100%**. The single disagreement was `A-001`, where my expectation said
-`needs_human_review: false, flags: []`.
+Two expected labels changed after the run. Both are recorded in
+`data/eval/cases.json` under `revised_after_live_run`, and both move the numbers
+**against** the final version.
 
-What the data showed: both arms flagged `MISSING_INFO`, and the baseline paired that
-flag with `needs_human_review: false` — a self-contradictory decision. My
-expectation agreed with it, so the metric penalised the final arm for resolving the
-contradiction.
+**A-006: `any_of ["P0","P1"]` → `P0` exactly.** The original hedge was wrong and
+masked a real error. The case exists as the active-exposure mirror of T-006's
+contained exposure; accepting P1 removed the distinction it was built to test.
+Effect: final priority accuracy 100% → 95%, and one forbidden-priority violation.
 
-The label was wrong on the policy, independent of what any model returned:
-`KB-AUTH-02`'s first step is *"Determine whether the customer uses SSO or a local
-password"*, which the ticket does not state. `MISSING_INFO` is defined as important
-information being absent, which fits. I corrected the expectation to
-`needs_human_review: true, flags: ["MISSING_INFO"]`; the change and previous values
-are recorded in `data/eval/cases.json` under `A-001.revised_after_live_run`.
+**A-001: reverted to the original expectation.** I had briefly changed this to expect
+`MISSING_INFO` and review after the live run showed it as the final version's only
+review miss. That was wrong on the policy — `MISSING_INFO` concerns information
+required for a reliable *decision*, and AUTH/P2 is determinable without knowing SSO
+versus local password, which matters for downstream handling — and wrong on method,
+because revising an expectation that penalised my own system is not defensible even
+when disclosed. Effect: final review accuracy 100% → 95%; the baseline's inconsistency
+on the same case is captured by the self-consistency metric instead.
 
-| | Baseline | Final |
-| --- | --- | --- |
-| Review accuracy, original labels | 100% | 95% |
-| Review accuracy, corrected labels | 95% | 100% |
-| Required flags, original labels | 66.7% | 93.3% |
-| Required flags, corrected labels | 73.3% | 100% |
-
-The table above uses the corrected labels. Re-scoring used `scripts/rescore.py`
-against stored decisions — no new API calls, and the decisions are unchanged.
+Re-scoring used `scripts/rescore.py` against stored decisions: no new API calls, and
+the decisions are unchanged.
 
 ---
 
@@ -147,17 +221,15 @@ The final arm cost $0.80 against the baseline's $0.29 for fewer calls (25 vs 26)
 | Baseline | 936 | 23,400 |
 | Final | 104,523 | 0 |
 
-The cache never hit. The per-request canary sat inside the cached system block, and
-a prompt cache is a prefix match, so every call wrote a fresh entry.
-
-Fixed by splitting the system prompt into two blocks with the breakpoint on the
-first: policy and KB (byte-stable, cached), then the canary (per-request, uncached).
-The canary stays in `system` rather than moving to the user turn, so instruction
-separation is preserved. Verified live — call 1: 4,131 written, 0 read; call 2: 0
-written, 4,131 read. Four regression tests pin the placement.
+The cache never hit. The per-request canary sat inside the cached system block, and a
+prompt cache is a prefix match, so every call wrote a fresh entry. Fixed by splitting
+the system prompt into a cached policy/KB block and an uncached canary block, keeping
+the canary in `system` so instruction separation survives. Verified live — call 1:
+4,131 written, 0 read; call 2: 0 written, 4,131 read. Four regression tests pin the
+placement.
 
 The $1.09 above therefore overstates a re-run. The evaluation was not re-run at the
-lower cost, because that would replace results already reported with a fresh set.
+lower cost, because that would replace reported results with a fresh set.
 
 ---
 
@@ -178,8 +250,7 @@ under test:
 | Review | Model's answer | Code-enforced, escalate-only |
 
 Both arms are scored by one function over one dict shape
-(`evaluation.score_raw_decision`), so neither can be scored more leniently than the
-other.
+(`evaluation.score_raw_decision`), so neither can be scored more leniently.
 
 Cases: 6 supplied tickets scored against author-judged labels in
 `data/eval/supplied_expected.json` (marked as judgment, not an answer key), plus 14
@@ -190,12 +261,12 @@ authored cases with per-case justifications. Stability repeats `T-001` (injectio
 
 ## Adversarial containment (offline, zero cost)
 
-The live run shows the safeguards are rarely needed on well-behaved output. This run
-shows what they do when output is hostile. Each distinct ticket text receives a
-different scripted defect — invented KB ID, fabricated refund promise, paraphrased
-and translated quotes, invented enum values, malformed JSON, canary leak, timeout,
-refusal, empty content — repeated so a repair meets the same defect. Both arms
-receive identical responses.
+The live run shows the safeguards are rarely needed on well-behaved output. This shows
+what they do when output is hostile. Each distinct ticket text receives a different
+scripted defect — invented KB ID, fabricated refund promise, paraphrased and
+translated quotes, invented enum values, malformed JSON, canary leak, timeout,
+refusal, empty content — repeated so a repair meets the same defect. Both arms receive
+identical responses.
 
 ```bash
 python run_eval.py --mode both --cases all --offline --adversarial --out adversarial-offline
@@ -210,76 +281,76 @@ python run_eval.py --mode both --cases all --offline --adversarial --out adversa
 | `ticket_id` mismatches | 20 | 0 |
 | Crashes | 0 | 0 |
 
-Caveats:
-
-- `Unknown KB IDs 5 → 0` is over-determined: most final-arm cases also fell back
-  because scripted evidence does not match real ticket text. Attribution comes from
-  `test_invented_kb_id_is_dropped_valid_kept`, which asserts
-  `["KB-BILL-01", "KB-REFUND-99"]` yields exactly `["KB-BILL-01"]`.
-- The ungrounded-commitment metric is a lower bound with incomplete recall. It is
-  negation-aware, so compliant text restating a prohibition is not counted, but a
-  novel phrasing is missed. This is why the pipeline assembles action text rather
-  than detecting bad text.
-- Category and priority accuracy are meaningless here and omitted; the scripted
-  decisions bear no relation to the tickets.
-- About a third of the baseline's schema invalidity is provider failures, not
-  malformed generation.
+Caveats: `Unknown KB IDs 5 → 0` is over-determined, since most final-arm cases also
+fell back because scripted evidence does not match real ticket text — attribution
+comes from `test_invented_kb_id_is_dropped_valid_kept`. The ungrounded-commitment
+metric is a lower bound whose recall failure is demonstrated in the manual review
+above. Category and priority accuracy are meaningless here and omitted. About a third
+of the baseline's schema invalidity is provider failures.
 
 ---
 
 ## Limitations
 
-1. **A plausible-but-wrong classification passes every check.** Category accuracy
-   was 100% for both arms, so nothing here distinguished right from wrong. The
-   checks verify legality, grounding, and support. This is the largest residual
-   risk, and the reason `SECURITY` and P0/P1 force review unconditionally.
-2. **Small sample.** Every percentage has a denominator of 20 or fewer; stability
-   rests on 3 tickets × 3 runs; tier invariance on one pair. Indicative, not
-   statistically conclusive.
-3. **The injection detector is evadable.** A test asserts an unlisted paraphrase
-   slips through. Containment rests on the deterministic layer.
-4. **Templated action text** may ask for information the ticket already supplied —
-   observed on `A-002` and in the live verification call, where the assembled
-   `KB-EXPORT-01` text opens with a condition that does not apply to a total
-   failure. Assembly removes fabrication but cannot select within an article.
-5. **The confidence threshold is inert at 0.75.** No case was reviewed solely on
-   confidence — every review was triggered by a flag, an escalated priority, or an
-   UNKNOWN. The threshold could be raised substantially or dropped to zero without
-   changing an outcome. Choosing it from data needs cases where confidence is the
-   deciding signal, which this set lacks. That is a gap in case design.
-6. **The repair path is barely exercised.** Schema-constrained output needed almost
-   no repairs, so "one attempt is enough" remains largely untested.
-7. **`supports` is unvalidated** — the assignment defines no vocabulary for it. The
-   live call returned `supports: ["flags"]`, outside the assignment's example;
-   constraining the field would have failed correct output.
+1. **The scorer does not read the output.** It checks structure and label agreement.
+   Every problem in the manual review section passed all automated metrics. This is
+   the most important limitation, because it means the headline table is a floor on
+   quality problems, not a ceiling.
+2. **The summary is unvalidated.** Evidence quotes are checked character-for-character
+   but the summary is not checked at all, and §3 requires it to be factual. A-006
+   shows an unsupported detail surviving alongside 100% exact evidence.
+3. **Flag precision is not measured.** The metric is inclusion-only; A-012 shows a
+   false-positive flag it cannot see.
+4. **Action relevance is not measured.** Grounding is guaranteed by construction;
+   relevance is not, and 6 of 20 cases show redundant or irrelevant steps.
+5. **A plausible-but-wrong classification passes every check.** Category accuracy was
+   100% for both arms, so nothing here distinguished right from wrong.
+6. **Small sample.** Denominators of 20 or fewer; stability on 3 tickets × 3 runs;
+   tier invariance on one pair. Indicative, not statistically conclusive.
+7. **The injection detector is evadable.** A test asserts an unlisted paraphrase slips
+   through. Containment rests on the deterministic layer.
+8. **The confidence threshold is inert at 0.75.** No case was reviewed solely on
+   confidence, so it could be raised substantially or dropped to zero without changing
+   an outcome. Choosing it from data needs cases where confidence decides, which this
+   set lacks.
+9. **The repair path is barely exercised.** Schema-constrained output needed almost no
+   repairs, so "one attempt is enough" remains largely untested.
+10. **`supports` is unvalidated** — the assignment defines no vocabulary for it.
+
+## What I would do next
+
+1. **Add semantic metrics**: flag precision, an action-relevance judgement, and a
+   summary-entailment check. The manual review found more real problems than the whole
+   automated suite; that gap should be closed before adding features.
+2. **Repeat the tier-invariance experiment** with counterbalanced repeated pairs.
+3. **Make action assembly context-aware** — select applicable steps within an article,
+   or return to model-authored text gated behind an entailment check against the KB.
+   Not changed now, because it would invalidate the reported evaluation.
+4. **Expand the case set**, particularly cases where confidence is the deciding review
+   signal.
+5. **Widen Hebrew detector coverage** from real ticket data.
 
 ---
 
 ## Defects found during development
 
 1. **Injection false positive.** `act_as` flagged *"Our admin can act as a delegate
-   for other users"*. Found by a deliberate false-positive test class. Fixed by
-   anchoring to a clause boundary.
-2. **Mock fixture shape mismatch.** The canned payload carried `kb_ids` only nested
-   inside `recommended_action`, so structured calls parsed as zero KB IDs and
-   reported `NO_KB_SUPPORT`.
-3. **Spurious tier-invariance failure in the harness.** Adversarial scripts assigned
-   by case index gave the tier pair different defects, so they diverged for a reason
-   unrelated to tier. Fixed by keying on distinct ticket text.
-4. **`verify_live.py` printed `canary not leaked: False`** on provider-failure paths
-   where the check never runs.
-5. **`python-dotenv` declared and never called.** A key in `.env` was silently
-   ignored. No test caught it because there was no test.
-6. **Committed JSON schemas were stale**, describing a contract the code no longer
-   implemented.
-7. **Three fields optional that should have been required.** `evidence`, `kb_ids`,
-   `flags` carried `default_factory=list`, so an omitted field validated with an
-   empty list substituted — making incomplete output indistinguishable from complete
-   output with nothing to report, and skipping the repair it should have earned.
+   for other users"*. Found by a deliberate false-positive test class.
+2. **Mock fixture shape mismatch** — `kb_ids` nested only inside
+   `recommended_action`, so structured calls parsed as zero KB IDs.
+3. **Spurious tier-invariance failure in the harness** — adversarial scripts assigned
+   by case index gave the tier pair different defects. Would have produced a false
+   claim in this report.
+4. **`verify_live.py` printed `canary not leaked: False`** on paths where the check
+   never runs.
+5. **`python-dotenv` declared and never called.** A key in `.env` was silently ignored.
+6. **Committed JSON schemas were stale.**
+7. **Three fields optional that should have been required** — an omitted `evidence`,
+   `kb_ids` or `flags` validated with an empty list substituted, skipping the repair it
+   should have earned.
 8. **The canary defeated prompt caching**, costing 2.7× on the final arm.
-
-Items 3 and 8 were bugs in the measurement and the economics rather than the system.
-Item 3 would have produced a false claim in this report.
+9. **Two expected labels were wrong** (A-006 hedged, A-001 revised in my own favour),
+   both corrected against the final version's score.
 
 ---
 

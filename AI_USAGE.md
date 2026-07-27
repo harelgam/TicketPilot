@@ -103,14 +103,20 @@ live: call 1 wrote 4,131 and read 0; call 2 wrote 0 and read 4,131. Four regress
 tests pin the placement. Correctness tests passed either way — this was only visible
 in the usage numbers of a real run.
 
-**An expected label of mine was wrong.** The final arm's only review-accuracy miss
-was `A-001`, where my expectation said `needs_human_review: false`. Both arms flagged
-`MISSING_INFO`; the baseline paired that flag with `review: false`, a
-self-contradictory decision my expectation agreed with — so the metric penalised the
-final arm for resolving it. `KB-AUTH-02`'s first step needs SSO vs local password,
-which the ticket never states, so `MISSING_INFO` is correct. I corrected the label,
-recorded the change and previous values in `data/eval/cases.json` under
-`revised_after_live_run`, and reported both sets of numbers.
+**Two expected labels of mine were wrong, and my first correction was itself wrong.**
+`A-001` was the final arm's only review miss. I initially changed the expectation to
+require `MISSING_INFO` and review, reasoning that KB-AUTH-02 needs SSO-versus-password
+information the ticket omits. On review that was wrong twice: `MISSING_INFO` concerns
+information needed for a reliable *decision*, and AUTH/P2 is determinable without it —
+and revising an expectation that had penalised my own system is not defensible even
+when disclosed. Reverted; the final arm is counted as a review error, and the
+baseline's contradiction on the same case is captured by a separate self-consistency
+metric instead.
+
+`A-006` was hedged as `any_of ["P0","P1"]` when the policy determines P0 — verified
+exposure, still active, production key. The hedge masked a real final-arm error
+(it returned P1; the baseline returned P0). Tightened to P0 exactly. Both corrections
+move the numbers against the final version.
 
 **Two defects in artifacts rather than behaviour**, both found by review rather than
 by tests:
@@ -171,3 +177,10 @@ puts false statements into production output.
 - **Containment claims.** The adversarial run shows `Unknown KB IDs 5 → 0`, but most
   final-arm cases also fell back for an unrelated reason, so the zero is
   over-determined. The report says so and attributes the claim to a unit test.
+- **"100% grounded" as a quality claim.** Action grounding is 100% by construction, not
+  by measurement. Reading the outputs by hand found the assembled text
+  context-insensitive in 6 of 20 cases, and found that the ungrounded-commitment
+  metric reported 0 for the baseline while missing invented remediation steps it
+  demonstrably produced. The scorer checks structure and label agreement; it does not
+  read the output, and the manual review found more real problems than the entire
+  automated suite.

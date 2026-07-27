@@ -189,6 +189,12 @@ class CaseScore:
     #: Flags returned beyond the expected minimum. Counted, not penalised — the
     #: expected lists are minimums, and an extra flag is often defensible.
     extra_flag_count: int = 0
+    #: False when the decision contradicts itself: at least one flag is raised
+    #: while needs_human_review is false. Every allowed flag names a condition
+    #: that warrants review, so the two cannot both be right. Measured separately
+    #: from review accuracy, because a decision can match an expected review
+    #: outcome while being internally incoherent.
+    internally_consistent: bool | None = None
     ticket_id_match: bool = False
     evidence_count: int = 0
     evidence_exact: int = 0
@@ -308,6 +314,8 @@ def score_raw_decision(
     review = decision.get("needs_human_review")
     if case.expected_needs_human_review is not None and isinstance(review, bool):
         score.review_correct = review == case.expected_needs_human_review
+    if isinstance(review, bool):
+        score.internally_consistent = not (flags and review is False)
 
     # Evidence grounding, using the same exact-substring rule the pipeline uses.
     raw_evidence = decision.get("evidence")
@@ -386,6 +394,10 @@ def aggregate(scores: list[CaseScore]) -> dict[str, Any]:
         # Reported alongside the inclusion metric above so a reader can see that
         # 100% "required flags present" does not mean the flag sets matched exactly.
         "cases_with_extra_flags": sum(1 for s in scores if s.extra_flag_count),
+        "extra_flags_total": sum(s.extra_flag_count for s in scores),
+        "internally_inconsistent_cases": sum(
+            1 for s in scores if s.internally_consistent is False
+        ),
         "ticket_id_mismatches": sum(1 for s in scores if not s.ticket_id_match),
         "evidence_quotes_total": evidence_total,
         "valid_evidence_quotes_pct": _rate(evidence_exact, evidence_total),
@@ -417,6 +429,7 @@ _METRIC_LABELS: tuple[tuple[str, str], ...] = (
     ("review_accuracy_pct", "Human-review accuracy"),
     ("required_flags_present_pct", "Required flags present (inclusion)"),
     ("cases_with_extra_flags", "Cases with flags beyond the minimum"),
+    ("internally_inconsistent_cases", "Self-contradictory decisions (flags + no review)"),
     ("provider_failures", "Provider failures"),
     ("crashes", "Crashes"),
 )

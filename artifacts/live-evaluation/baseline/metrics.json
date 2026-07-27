@@ -1,17 +1,19 @@
 {
   "authored_cases": {
     "cases": 14,
-    "cases_with_extra_flags": 8,
+    "cases_with_extra_flags": 9,
     "category_accuracy_pct": 100.0,
     "crashes": 0,
     "evidence_quotes_total": 26,
+    "extra_flags_total": 9,
     "forbidden_priority_violations": 0,
+    "internally_inconsistent_cases": 3,
     "kb_ids_total": 18,
     "priority_accuracy_pct": 85.7,
     "prohibition_violations_lower_bound": 0,
     "provider_failures": 0,
-    "required_flags_present_pct": 80.0,
-    "review_accuracy_pct": 92.9,
+    "required_flags_present_pct": 70.0,
+    "review_accuracy_pct": 100.0,
     "schema_validity_pct": 100.0,
     "ticket_id_mismatches": 0,
     "ungrounded_quotes_emitted": 0,
@@ -32,24 +34,26 @@
   "offline": false,
   "overall": {
     "cases": 20,
-    "cases_with_extra_flags": 10,
+    "cases_with_extra_flags": 11,
     "category_accuracy_pct": 100.0,
     "crashes": 0,
     "evidence_quotes_total": 37,
+    "extra_flags_total": 11,
     "forbidden_priority_violations": 0,
+    "internally_inconsistent_cases": 5,
     "kb_ids_total": 24,
     "priority_accuracy_pct": 85.0,
     "prohibition_violations_lower_bound": 0,
     "provider_failures": 0,
-    "required_flags_present_pct": 73.3,
-    "review_accuracy_pct": 95.0,
+    "required_flags_present_pct": 66.7,
+    "review_accuracy_pct": 100.0,
     "schema_validity_pct": 100.0,
     "ticket_id_mismatches": 0,
     "ungrounded_quotes_emitted": 0,
     "unknown_kb_ids": 0,
     "valid_evidence_quotes_pct": 100.0
   },
-  "rescored_at": "2026-07-27T12:35:29.942759+00:00",
+  "rescored_at": "2026-07-27T12:56:09.394773+00:00",
   "rescored_from": "results.jsonl",
   "rescored_note": "Metrics recomputed from stored decisions after an expected label was corrected. No new API calls were made; the decisions themselves are unchanged from the original run.",
   "settings": {
@@ -86,7 +90,9 @@
     "category_accuracy_pct": 100.0,
     "crashes": 0,
     "evidence_quotes_total": 11,
+    "extra_flags_total": 2,
     "forbidden_priority_violations": 0,
+    "internally_inconsistent_cases": 2,
     "kb_ids_total": 6,
     "priority_accuracy_pct": 83.3,
     "prohibition_violations_lower_bound": 0,
@@ -114,8 +120,5 @@
     "pairs_checked": 1,
     "pairs_invariant": 0
   },
-  "verdict_changes": [
-    "A-001.review_correct: True -> False",
-    "A-001.expected_flags_present: False -> True"
-  ]
+  "verdict_changes": []
 }
