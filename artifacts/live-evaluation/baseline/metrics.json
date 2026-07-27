@@ -59,7 +59,7 @@
     "unknown_kb_ids": 0,
     "valid_evidence_quotes_pct": 100.0
   },
-  "rescored_at": "2026-07-27T13:46:07.333275+00:00",
+  "rescored_at": "2026-07-27T14:05:10.832834+00:00",
   "rescored_from": "results.jsonl",
   "rescored_note": "Metrics recomputed from stored decisions after an expected label was corrected. No new API calls were made; the decisions themselves are unchanged from the original run.",
   "settings": {

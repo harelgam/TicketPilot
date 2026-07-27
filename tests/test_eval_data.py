@@ -178,6 +178,67 @@ class TestExpectedValuesUseLegalVocabularies:
             assert not ("expected_priority" in case and "expected_priority_any_of" in case)
 
 
+class TestRevisionMetadataSupportsTheTransparencyClaim:
+    """The report claims every corrected expectation records what changed, why, and
+    which arm it penalises. That claim has to be mechanically true, not nearly true:
+    two of the seven entries were missing fields the report said they all carried.
+    """
+
+    @staticmethod
+    def _revised(cases: dict) -> list[dict]:
+        return [c for c in cases["cases"] if "revised_after_live_run" in c]
+
+    def test_at_least_one_case_was_revised(self, cases: dict) -> None:
+        # Guards the tests below against silently passing on an empty set.
+        assert self._revised(cases)
+
+    def test_every_revision_records_the_previous_state(self, cases: dict) -> None:
+        for case in self._revised(cases):
+            revision = case["revised_after_live_run"]
+            # ``added`` is permitted alongside ``was`` for a constraint that did not
+            # previously exist, but ``was`` is required in every entry so a reader
+            # never has to infer the prior expectation from the surrounding prose.
+            assert "was" in revision, case["case_id"]
+            assert revision["was"], case["case_id"]
+
+    def test_every_revision_records_a_reason(self, cases: dict) -> None:
+        for case in self._revised(cases):
+            assert len(case["revised_after_live_run"].get("reason", "")) > 80, case["case_id"]
+
+    def test_every_revision_records_which_arm_it_penalises(self, cases: dict) -> None:
+        for case in self._revised(cases):
+            direction = case["revised_after_live_run"].get("direction_of_impact", "")
+            assert direction, case["case_id"]
+            assert any(w in direction.upper() for w in ("BASELINE", "FINAL", "NEUTRAL")), (
+                case["case_id"],
+                direction,
+            )
+
+    def test_justifications_do_not_describe_a_superseded_any_of(self, cases: dict) -> None:
+        """A justification must not claim any-of scoring for a field now scored exactly.
+
+        Three justifications still explained why priority or category was scored as
+        any-of after the label had been tightened to a single value, so the main
+        justification contradicted its own revision block.
+        """
+        # Affirmative claims only. A-006 legitimately says "scoring this as any-of
+        # would defeat the purpose of the pair" while scoring exactly, so a blanket
+        # ban on the term would reject correct prose.
+        claims_any_of = (
+            "is any-of",
+            "are any-of",
+            "is scored as any-of",
+            "are scored as any-of",
+            "are both scored as any-of",
+        )
+        for case in cases["cases"]:
+            if any(k.endswith("_any_of") for k in case):
+                continue
+            text = case["justification"].lower()
+            for phrase in claims_any_of:
+                assert phrase not in text, (case["case_id"], phrase)
+
+
 class TestSuppliedExpectationsAreLabelledAsJudgment:
     def test_all_six_covered(self, supplied_expected: dict) -> None:
         ids = {e["ticket_id"] for e in supplied_expected["expectations"]}

@@ -16,13 +16,14 @@ fabrication.
 > $1.09. The final version is better on priority accuracy (80% → 95%), required-flag
 > recall (67% → 93%), self-consistency (5 → 0 self-contradictory decisions) and
 > stability (67% → 100%); and **worse** on review accuracy (100% → 95%), one
-> forbidden-priority violation the baseline got right (A-006), and one ruled-out KB
-> article selected (A-012).
+> forbidden-priority violation the baseline got right (A-006), and KB selection on
+> A-012, where it chose the single-user login article for a whole-tenant outage and
+> missed the incident article the baseline found.
 >
 > A manual semantic review found problems no automated metric caught: assembled action
-> text is always KB-grounded but context-insensitive in 6 of 20 cases, one flag is a
-> false positive, and one summary states a detail the ticket does not support. See
-> [`evaluation_report.md`](evaluation_report.md).
+> text is always KB-grounded but context-insensitive in 6 of 20 cases, **two** flags are
+> false positives (A-001, A-012), and one summary states a detail the ticket does not
+> support. See [`evaluation_report.md`](evaluation_report.md).
 
 ---
 
@@ -56,7 +57,7 @@ cp .env.example .env      # then edit .env and set ANTHROPIC_API_KEY
 clean-environment requirement verifiable.
 
 Verified from a clean checkout (`git archive` of HEAD into an empty directory, fresh
-venv, install from `requirements.txt` only): 351 tests pass with no API key, and pass
+venv, install from `requirements.txt` only): 356 tests pass with no API key, and pass
 from a different working directory; the CLI, the `triage` entry point, batch mode, and
 the schema generator all work.
 
@@ -122,7 +123,7 @@ python scripts/rescore.py artifacts/live-evaluation/*/results.jsonl --write
 ### Run the tests
 
 ```bash
-python -m pytest        # 351 tests, all offline
+python -m pytest        # 356 tests, all offline
 ```
 
 ### Regenerate the JSON schemas
@@ -315,8 +316,8 @@ the reported evaluation.
 ## Known limitations and failure modes
 
 1. **The automated scorer does not read the output.** It checks structure and label
-   agreement. A manual review found context-insensitive action text, a false-positive
-   flag, and an unsupported summary detail — none of which any metric caught. The
+   agreement. A manual review found context-insensitive action text, two false-positive
+   flags, and an unsupported summary detail — none of which any metric caught. The
    headline numbers are a floor on quality problems, not a ceiling.
 2. **The summary is unvalidated.** Evidence quotes are checked character-for-character;
    the summary is not checked at all, though §3 requires it to be factual. A-006 shows

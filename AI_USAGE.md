@@ -163,8 +163,11 @@ worst class of defect here, because each one *reported success*:
 - **`expected_kb_ids_include` was loaded from the case file and never read.** So a
   legitimate KB article selected for the wrong situation passed every check — the
   allowlist only rejects invented IDs. Implementing the check, plus a `must_not_kb_ids`
-  counterpart, immediately caught A-012 selecting the credential-compromise article for
-  an ordinary lockout: a problem previously visible only by reading the output.
+  counterpart, immediately caught A-012: a whole production tenant locked out with SSO
+  failing for every user, for which the final version selected KB-AUTH-02 (*Single-user
+  login issue*) and missed KB-AUTH-01 (*Widespread login incident*). Both IDs are
+  legitimate, so nothing but a selection check could see it — and previously only
+  reading the output could.
 
 **A stored score that went stale, and artifacts to match.** Run records embedded the
 score alongside the decision. After A-006's expected label was corrected,
@@ -185,6 +188,30 @@ contract violation for a field the baseline is never asked to produce. The mock 
 emits the shape each mode actually requests. Worth stating plainly: this fixture bug
 was inflating a number in my own favour, and it was found by review rather than by a
 test.
+
+**Five case descriptions written from memory, five of them wrong.** The report's
+expectation-corrections section described A-005 as a ticket with no operational facts
+(its facts contradict each other), quoted A-007's previous label as `["P2","P3"]` (it was
+`["P1","P2"]`), called A-010 a billing failure (it is a never-completing export),
+described A-011's correction as a widening when AUTH had been removed, and called A-012 a
+single-user lockout while describing KB-AUTH-02 as a credential-compromise article — it
+is *Single-user login issue*; KB-SEC-01 is the credential article. Three of those
+contradicted the manual-review section of the same document. Nobody can run a paragraph,
+so nothing caught them until a reader compared the prose to `cases.json`. Every
+description is now taken from the data files, and two tests assert that a case
+justification cannot contradict its own label — one of them would have caught three
+justifications still explaining why a label was scored as any-of after it had been
+tightened to a single value.
+
+**A forbidden-ID rule that looked drawn around my own output.** Ruling out KB-AUTH-02 on
+A-012 was correct, but I paired it with a claim that no supplied article applies, on the
+grounds that KB-AUTH-01 is scoped to multiple customers. Nothing in KB-AUTH-01 says that;
+it was an inference from the word *widespread* in its title. The effect was that the
+article the final version chose was penalised while the article the baseline chose was
+neither required nor forbidden — the shape of a rule fitted to a result, even though it
+was not one. KB-AUTH-01 is now required, which penalises the final version on a second
+metric and credits the baseline. When a scoring rule can be read as self-serving, the fix
+is to make it symmetric, not to explain the asymmetry.
 
 **A declared dependency that was never called.** `python-dotenv` was in
 `requirements.txt` and `pyproject.toml`, and nothing called `load_dotenv()`. A key
@@ -235,6 +262,8 @@ puts false statements into production output.
   by measurement. Reading the outputs by hand found the assembled text
   context-insensitive in 6 of 20 cases, and found that the ungrounded-commitment
   metric reported 0 for the baseline while missing invented remediation steps it
-  demonstrably produced. The scorer checks structure and label agreement; it does not
+  demonstrably produced. The results table no longer prints a percentage in that cell
+  for the baseline, because a "100%" the same report disproves two pages later is worse
+  than an honest floor. The scorer checks structure and label agreement; it does not
   read the output, and the manual review found more real problems than the entire
   automated suite.
