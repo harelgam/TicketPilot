@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ticketpilot"
+version = "0.1.0"
+description = "AI-assisted support ticket triage with deterministic validation"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic",
+    "pydantic",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+triage = "ticketpilot.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Paths are resolved relative to the repo root at runtime, never hard-coded,
+# so the suite runs from any working directory on a clean machine.
+addopts = "-q"

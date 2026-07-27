@@ -1,0 +1,34 @@
+# Secrets — never commit a populated .env
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Evaluation output. runs/baseline/ is deliberately tracked: it is the recorded
+# evidence of the pre-hardening failures that motivated the final version.
+runs/*
+!runs/baseline/
+
+# The assignment brief itself — reference material, not project source.
+# Remove this line if you would rather ship it alongside the submission.
+AI_Take_Home_Assignment_EN.pdf
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
