@@ -186,6 +186,9 @@ class CaseScore:
     forbidden_priority_used: bool = False
     review_correct: bool | None = None
     expected_flags_present: bool | None = None
+    #: Flags returned beyond the expected minimum. Counted, not penalised — the
+    #: expected lists are minimums, and an extra flag is often defensible.
+    extra_flag_count: int = 0
     ticket_id_match: bool = False
     evidence_count: int = 0
     evidence_exact: int = 0
@@ -290,7 +293,12 @@ def score_raw_decision(
     score.ticket_id_match = decision.get("ticket_id") == case.ticket.ticket_id
 
     flags = [f for f in decision.get("flags", []) if isinstance(f, str)]
+    score.extra_flag_count = len(set(flags) - set(case.expected_flags_include))
     if case.expected_flags_include:
+        # Inclusion-based: every required flag must be present. Extra flags are
+        # NOT treated as errors, because the expected lists specify the minimum
+        # required set rather than an exhaustive one. Extras are counted
+        # separately so the metric cannot be read as exact-match accuracy.
         score.expected_flags_present = all(f in flags for f in case.expected_flags_include)
     elif case.expected_needs_human_review is False:
         # For cases expected to pass unreviewed, an empty flag list is the
@@ -372,9 +380,12 @@ def aggregate(scores: list[CaseScore]) -> dict[str, Any]:
         "review_accuracy_pct": _rate(
             sum(1 for s in scored_review if s.review_correct), len(scored_review)
         ),
-        "expected_flags_present_pct": _rate(
+        "required_flags_present_pct": _rate(
             sum(1 for s in scored_flags if s.expected_flags_present), len(scored_flags)
         ),
+        # Reported alongside the inclusion metric above so a reader can see that
+        # 100% "required flags present" does not mean the flag sets matched exactly.
+        "cases_with_extra_flags": sum(1 for s in scores if s.extra_flag_count),
         "ticket_id_mismatches": sum(1 for s in scores if not s.ticket_id_match),
         "evidence_quotes_total": evidence_total,
         "valid_evidence_quotes_pct": _rate(evidence_exact, evidence_total),
@@ -404,7 +415,8 @@ _METRIC_LABELS: tuple[tuple[str, str], ...] = (
     ("prohibition_violations_lower_bound", "Ungrounded commitments (lower bound)"),
     ("ticket_id_mismatches", "Ticket-ID mismatches"),
     ("review_accuracy_pct", "Human-review accuracy"),
-    ("expected_flags_present_pct", "Expected flags present"),
+    ("required_flags_present_pct", "Required flags present (inclusion)"),
+    ("cases_with_extra_flags", "Cases with flags beyond the minimum"),
     ("provider_failures", "Provider failures"),
     ("crashes", "Crashes"),
 )

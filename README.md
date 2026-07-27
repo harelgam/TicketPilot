@@ -11,17 +11,13 @@ and enforced by code. A model failure or an injected instruction degrades the
 result into a reviewable abstention rather than an authoritative-looking
 fabrication.
 
-> **Evaluation status: complete.** A full baseline-to-final comparison was run
-> against the real API — 20 cases × 2 arms plus 3×3 stability, 51 calls, $1.09.
-> Headline results: priority accuracy 85% → 100%, expected flags 73% → 100%,
-> stability 67% → 100%, and **tier invariance FAILED for the baseline** (identical
-> ticket text, P3 for `standard` and P2 for `platinum`) while the final version
-> passed.
->
-> [`evaluation_report.md`](evaluation_report.md) also records what the run showed
-> *against* me: four safeguards were never exercised because the model did not
-> misbehave, one expected label of mine was wrong, and a canary-placement bug of
-> mine defeated prompt caching and made the final arm cost 2.7× the baseline.
+> **Evaluation status: complete.** Full baseline-to-final comparison against the
+> real API — 20 cases × 2 arms plus 3×3 stability, 51 calls, $1.09. Priority accuracy
+> 85% → 100%, required flags 73% → 100%, stability 67% → 100%. The baseline showed an
+> observed tier-invariance failure on one paired case; see the report, which also
+> records four safeguards the run never exercised, one expected label of mine that
+> was wrong, and a prompt-cache bug of mine that made the final arm cost 2.7× the
+> baseline.
 
 ---
 
@@ -185,21 +181,19 @@ instruction injected into a ticket.
 
 1. **Instruction separation.** Policy and KB live only in the system prompt; the
    ticket appears only in the user turn, inside `<untrusted_ticket>` tags, labelled
-   as data. The tags are not a security mechanism — they make the trust boundary
-   unambiguous to the model.
+   as data. The tags are not a security mechanism — they mark the trust boundary.
 2. **Deterministic detector.** Known phrasings in English and Hebrew. It does not
-   judge the ticket harmful, does not modify it, and does not block the call — it
-   only adds `PROMPT_INJECTION` and forces review. Flags combine as a union with
-   the model's, so either layer detecting is enough. **It is not comprehensive and
-   is not a security boundary**; there is a test asserting that an unlisted
-   paraphrase slips through.
+   judge the ticket harmful, modify it, or block the call — it adds
+   `PROMPT_INJECTION` and forces review. Flags union with the model's, so either
+   layer detecting is enough. **Not comprehensive and not a security boundary**; a
+   test asserts an unlisted paraphrase slips through.
 3. **Invariants that do not depend on detection.** Even when both layers miss, the
-   model cannot change the `ticket_id`, emit a value outside a closed vocabulary,
-   invent a KB ID, fabricate an evidence quote, author the action text, cancel a
-   policy-required review, or make the application echo the system prompt (a canary
-   in the system prompt fails the response closed if it appears in output).
+   model cannot change the `ticket_id`, emit an out-of-vocabulary value, invent a KB
+   ID, fabricate an evidence quote, author the action text, cancel a policy-required
+   review, or make the application echo the system prompt (a canary fails the
+   response closed if it appears in output).
 
-Layer 3 is the one that bounds the damage.
+Layer 3 bounds the damage.
 
 ### The KB as data, and the growth path
 
@@ -256,13 +250,15 @@ timeout, would put a false statement in the response.
 
 ### How to read `confidence`
 
-A **self-assessed score** from 0.0 to 1.0 for how certain the model is that the
-**category + priority pair** is correct given only the ticket text. The prompt asks
-for it in exactly those terms, so the request and this documentation agree: it is
-explicitly **not** a calibrated probability, and **not** a measure of grounding
-quality — a decision can be confident and ungrounded, which is why the evidence and
-KB checks are separate and independent of it. It is used solely as one review
-trigger among many.
+A self-assessed score from 0.0 to 1.0 for how certain the model is that the
+category + priority pair is correct given only the ticket text. The system prompt
+asks for it in exactly those terms. It is **not** a calibrated probability and
+**not** a measure of grounding quality — a decision can be confident and ungrounded,
+which is why the evidence and KB checks are independent of it. Used as one review
+trigger among several.
+
+In the live run no case was reviewed solely on confidence, so at 0.75 the threshold
+is currently inert. See the evaluation report.
 
 ---
 
@@ -280,75 +276,61 @@ trigger among many.
 | A7 | Author-judged labels for the supplied tickets live in a data file marked as judgment, never in `src/`. No supplied ticket ID appears anywhere under `src/` (there is a test). |
 | A8 | `recommended_action.text` is excluded from the model schema and assembled from KB content. |
 
-**Why no agent framework.** The KB is 7 articles that fit in a cached system
-prompt, so a tool-calling loop buys nothing while adding latency, cost, and
-run-to-run nondeterminism — and nondeterminism directly degrades the stability
-metric the assignment asks for. Classification and priority are a fixed policy,
-better expressed as prompt policy plus a deterministic rule layer than as tools
-the model may or may not choose to call. Considered and rejected deliberately.
+**Why no agent framework.** The KB is 7 articles that fit in a cached system prompt,
+so a tool-calling loop adds latency, cost, and run-to-run nondeterminism for no gain
+— and nondeterminism degrades the stability metric the assignment grades.
+Classification and priority are a fixed policy, better expressed as prompt policy
+plus a deterministic rule layer than as tools the model may or may not call.
 
-**Why the action text is assembled rather than validated.** A valid KB ID paired
-with contradicting prose is still ungrounded. Detecting that in free text does not
-work: a keyword check rejects the *correct* sentence too, since compliant text
-restates the prohibition ("…and do not promise a refund before investigation"), and
-no keyword scan catches "the refund is already approved". Doing it properly needs
-semantic grounding validation, which is non-deterministic and harder to defend.
-Assembling from trusted content makes the failure impossible instead.
+**Why the action text is assembled rather than validated.** A valid KB ID paired with
+contradicting prose is still ungrounded, and detecting that in free text does not
+work: a keyword check also rejects the correct sentence, because compliant text
+restates the prohibition. Details in [`AI_USAGE.md`](AI_USAGE.md).
 
 ---
 
 ## Known limitations and failure modes
 
-1. **A plausible-but-wrong classification passes every check.** Nothing verifies
-   the category is *right*, only that it is legal, quoted from a real substring,
-   and backed by a real article. This is the largest residual risk, and the reason
-   `SECURITY` and P0/P1 force review unconditionally.
-2. **The injection detector is evadable by design of the problem, not by oversight.**
-   Containment rests on Layer 3.
-3. **Action text is templated, not tailored.** It may ask for information the
-   ticket already supplied.
-4. **Accuracy and stability are unmeasured** (one-call API budget). See the
-   evaluation report.
-5. **One repair attempt is a reasoned assumption, not a measured finding.**
-6. **`supports` is unvalidated** — the assignment defines no vocabulary for it.
-7. **Confidence is uncalibrated.** The 0.75 threshold is a default, not a result.
-8. **Single-language detector coverage is uneven.** English patterns outnumber
-   Hebrew ones; a Hebrew paraphrase is more likely to evade Layer 2.
+1. **A plausible-but-wrong classification passes every check.** The live run makes
+   this concrete: category accuracy was 100% for *both* arms, so nothing measured
+   here distinguishes a right category from a wrong one. The checks verify legality,
+   grounding, and KB support. Largest residual risk, and the reason `SECURITY` and
+   P0/P1 force review unconditionally.
+2. **The injection detector is evadable.** A test asserts an unlisted paraphrase
+   slips through. Containment rests on the deterministic layer, not detection.
+3. **Action text is templated, not tailored.** It may ask for information the ticket
+   already supplied — observed in the live run.
+4. **Accuracy and stability were measured on only 20 cases and three stability
+   tickets, and tier invariance on a single pair. The results are indicative, not
+   statistically conclusive.**
+5. **The confidence threshold is inert at 0.75.** No case in the live run was
+   reviewed solely on confidence, so the threshold could be raised substantially or
+   dropped to zero without changing an outcome. Choosing it from data needs cases
+   where confidence is the deciding signal, which this set lacks.
+6. **One repair attempt is a reasoned assumption.** Schema-constrained output needed
+   almost no repairs, so it remains largely untested.
+7. **`supports` is unvalidated** — the assignment defines no vocabulary for it.
+8. **Hebrew detector coverage is thinner than English.** A Hebrew paraphrase is more
+   likely to evade the Layer-2 detector.
+9. **Four safeguards were never exercised by the real model.** The `ticket_id`
+   protection, KB-ID allowlist, evidence check, and action assembly all measured
+   0 → 0 in the live run. Their measured value comes from the adversarial tests, so
+   the live sample alone cannot justify their complexity.
 
 ## What I would do next, in priority order
 
-1. **Fund the evaluation** — populate accuracy, stability, and the threshold sweep.
-   Everything is one command away; this is the biggest gap.
-2. **Attack the plausible-but-wrong failure** — an LLM-judge or NLI check that the
-   `summary` and `category` are entailed by the quoted evidence, gated behind a
-   flag so it stays optional.
-3. **Calibrate confidence** against outcomes rather than trusting self-report, and
-   set the threshold from the curve.
-4. **Model-authored action text with semantic grounding validation**, to recover
+1. **Repeat the tier-invariance experiment properly.** Run each tier several times in
+   alternating order and compare distributions. The current single paired observation
+   cannot separate a tier effect from the run-to-run variance the baseline also
+   showed.
+2. **Expand the evaluation set**, particularly cases where confidence is the
+   deciding review signal, so the threshold can be chosen from data.
+3. **Attack the plausible-but-wrong failure** — an entailment check that the
+   `summary` and `category` follow from the quoted evidence, behind an optional flag.
+4. **Calibrate confidence** against outcomes rather than self-report.
+5. **Model-authored action text with semantic grounding validation**, to recover
    ticket-specific wording without reintroducing fabrication.
-5. **Widen Hebrew detector coverage**, ideally from real ticket data rather than
-   invented phrasings.
-6. **Prompt-cache metrics in the run record** — `cache_read_input_tokens` is
-   captured but nothing asserts the prefix is actually being reused.
-7. **An HTTP surface** if this needed to be a service rather than a CLI; the
-   pipeline is already a pure function of (ticket, kb, provider, settings).
-
-## Unfinished work
-
-Carried deliberately, not overlooked:
-
-- **The confidence threshold is still the default 0.75, not a value chosen from
-  data.** The real run showed why: no case was reviewed *solely* because of the
-  confidence rule, so at 0.75 the threshold is currently inert — every review was
-  triggered by a flag, an escalated priority, or an UNKNOWN. Choosing it properly
-  needs cases where confidence is the deciding signal, which this set does not
-  contain. That is a gap in my case design, not in the harness.
-- **The repair path is barely exercised.** With schema-constrained output the real
-  run needed almost no repairs, so "one attempt is enough" remains largely untested
-  against real malformed output.
-- **Every percentage has a denominator of 20 or fewer**, and the stability finding
-  rests on 3 tickets × 3 runs. Indicative, not statistically meaningful.
-- **Four safeguards were never exercised by the real model** (`ticket_id`
-  protection, KB-ID allowlist, evidence check, action assembly all measured 0 → 0).
-  Their justification is tail protection plus the adversarial run, not the live
-  numbers.
+6. **Widen Hebrew detector coverage** from real ticket data rather than invented
+   phrasings.
+7. **An HTTP surface** if this became a service; the pipeline is already a pure
+   function of (ticket, kb, provider, settings).
