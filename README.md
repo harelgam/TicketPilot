@@ -94,7 +94,7 @@ python run_eval.py --mode both --cases all --runs 3
 ### Run the tests
 
 ```bash
-python -m pytest        # 277 tests, all offline
+python -m pytest        # 295 tests, all offline
 ```
 
 ---
@@ -261,8 +261,8 @@ with contradicting prose is still ungrounded. Detecting that in free text does n
 work: a keyword check rejects the *correct* sentence too, since compliant text
 restates the prohibition ("…and do not promise a refund before investigation"), and
 no keyword scan catches "the refund is already approved". Doing it properly needs
-semantic grounding validation, which is non-deterministic and out of scope for the
-timebox. Assembling from trusted content makes the failure impossible instead.
+semantic grounding validation, which is non-deterministic and harder to defend.
+Assembling from trusted content makes the failure impossible instead.
 
 ---
 
@@ -302,21 +302,14 @@ timebox. Assembling from trusted content makes the failure impossible instead.
 7. **An HTTP surface** if this needed to be a service rather than a CLI; the
    pipeline is already a pure function of (ticket, kb, provider, settings).
 
-## Time spent
+## Unfinished work
 
-Roughly 5 hours, against a 4-hour timebox:
+Carried deliberately, not overlooked:
 
-| Phase | Approx. |
-| --- | --- |
-| Reading the assignment, requirements extraction, design review rounds | 1h 00m |
-| Scaffold, contracts, KB transcription | 0h 40m |
-| Deterministic layer + tests | 0h 50m |
-| Providers, baseline, evaluation data | 0h 50m |
-| Evaluation harness and scoring | 0h 45m |
-| Final pipeline, CLI, live verification | 0h 45m |
-| Documentation | 0h 30m |
-
-The overrun went into the design conversation and into the test suite. Given the
-assignment's stated priority — "a small, well-tested system that knows when it is
-uncertain" over a larger unvalidated one — I would make the same trade again, and
-the honest note is that the *evaluation* is where the missing time shows.
+- The accuracy and stability halves of the evaluation are unpopulated — the
+  harness is built and tested, and each is a single documented command
+  ([`evaluation_report.md`](evaluation_report.md) has both).
+- The confidence threshold is the documented default of 0.75 rather than a value
+  selected from data. It is configuration precisely so it can be set from evidence.
+- Whether one repair attempt suffices is a reasoned assumption that the evaluation
+  was meant to test, and has not.

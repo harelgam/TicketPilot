@@ -47,6 +47,46 @@ def repo_root() -> Path:
     return Path.cwd()
 
 
+def _load_dotenv_once() -> None:
+    """Load ``.env`` from the project root, if present.
+
+    Called at import time so that every entry point — CLI, run_eval, the live
+    verification script — picks up a local ``.env`` without each having to
+    remember to. Without this, ``python-dotenv`` sits in the dependency list doing
+    nothing and a key placed in ``.env`` is silently ignored, surfacing as an
+    opaque authentication error rather than an obvious missing-key one.
+
+    ``override=False`` gives a real environment variable precedence over the file,
+    which is the conventional order and keeps CI explicit.
+    """
+    try:
+        from dotenv import load_dotenv
+    except ImportError:  # pragma: no cover - dotenv is a declared dependency
+        return
+    env_path = repo_root() / ".env"
+    if env_path.is_file():
+        load_dotenv(env_path, override=False)
+
+
+_load_dotenv_once()
+
+
+def api_key_status() -> str:
+    """Describe the credential situation for a human-readable error message.
+
+    Distinguishes "no key at all" from "a key that is present but empty", because
+    an empty ``ANTHROPIC_API_KEY`` still occupies its precedence slot and will be
+    sent as an empty credential — producing an authentication failure that looks
+    like a bad key rather than an unfilled template.
+    """
+    raw = os.environ.get("ANTHROPIC_API_KEY")
+    if raw is None:
+        return "missing"
+    if not raw.strip():
+        return "empty"
+    return "present"
+
+
 def data_dir() -> Path:
     """Directory holding the KB, supplied tickets, and evaluation cases."""
     override = os.environ.get("TICKETPILOT_DATA_DIR")

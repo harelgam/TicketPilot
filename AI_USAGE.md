@@ -126,6 +126,18 @@ act as" / "acts as" / "acting as" mid-sentence. The pattern is now anchored to a
 clause boundary, with politeness words allowed after it so "Please act as…" still
 matches. The offending string is a permanent regression case.
 
+**A dependency that was declared and never used.** `python-dotenv` was in
+`requirements.txt` and `pyproject.toml`, and nothing anywhere called
+`load_dotenv()`. A key placed in `.env` would have been silently ignored and shown
+up as an opaque authentication error. This one was *not* caught by a test — there
+was no test, which was exactly the problem; it was caught by checking the wiring
+before handing the file over. The fix loads `.env` at import time with
+`override=False` so a real environment variable still wins, and adds an
+`api_key_status()` helper that distinguishes *missing* from *present but empty*,
+because an empty key still occupies its precedence slot and gets sent as a
+credential. Six regression tests now cover it, two running a subprocess against a
+relocated project root to prove a `.env` value genuinely reaches the environment.
+
 **Two more defects that testing caught**, both in my own measurement code rather
 than the system, which is the more embarrassing category:
 

@@ -10,7 +10,7 @@ before any table, rather than let a reader discover it in a footnote.
 | --- | --- |
 | The real Claude integration works end to end | Verifiable with one call — `python scripts/verify_live.py` |
 | Hostile or malformed model output is contained | **Measured**, reproducibly, at zero API cost (table below) |
-| Failure modes degrade safely instead of crashing | **Measured**, 277 offline tests plus the adversarial run |
+| Failure modes degrade safely instead of crashing | **Measured**, 295 offline tests plus the adversarial run |
 | Category and priority accuracy, baseline vs final | **Not measured.** Requires real model output. Command given below. |
 | Run-to-run stability (3 tickets × 3 runs) | **Not measured.** Harness built and tested; needs real calls. |
 | Confidence threshold chosen from data | **Not done.** Currently the documented default of 0.75. |
@@ -224,6 +224,16 @@ These are real, and each is fixed with a regression test:
 4. **Misleading verification output.** `verify_live.py` printed
    `canary not leaked: False` on provider-failure paths, where the canary check
    never runs — displaying a not-applicable result as a breached safety check.
+5. **`python-dotenv` was a declared dependency that nothing called.** A key placed
+   in `.env` was silently ignored, surfacing as an opaque authentication error
+   rather than an obvious missing-key one. Caught by checking the wiring before
+   handing the file over, not by a failing test — there was no test, which was the
+   problem. Now loaded at import time in `config.py`, with `override=False` so a
+   real environment variable still wins, plus an `api_key_status()` helper that
+   distinguishes *missing* from *present but empty* (an empty key still occupies
+   its precedence slot and gets sent). Six regression tests, two of which run a
+   subprocess against a relocated project root to prove a `.env` value genuinely
+   reaches the environment.
 
 Item 3 is the one I would flag to a reviewer: it was a bug in the *measurement*,
 not the system, and it would have produced a confidently wrong claim in this
@@ -233,11 +243,11 @@ report.
 
 ## Test suite
 
-277 tests, all offline, no API key required — which is also what makes the
+295 tests, all offline, no API key required — which is also what makes the
 clean-environment requirement verifiable.
 
 ```bash
-python -m pytest          # 277 passed
+python -m pytest          # 295 passed
 ```
 
 Coverage by file:
@@ -252,6 +262,7 @@ Coverage by file:
 | `test_eval_data.py` | 26 | Data integrity as build failures |
 | `test_providers.py` | 24 | Provider boundary and scripted defects |
 | `test_kb.py` | 23 | KB loading and fidelity to the assignment |
+| `test_config.py` | 18 | Settings, path resolution, `.env` loading |
 | `test_baseline.py` | 14 | Baseline is weak in the intended ways |
 | `test_actions.py` | 11 | Action assembly, safe generic text |
 

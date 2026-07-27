@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from pydantic import BaseModel  # noqa: E402
 
-from ticketpilot.config import Settings  # noqa: E402
+from ticketpilot.config import Settings, api_key_status  # noqa: E402
 from ticketpilot.kb import KnowledgeBase  # noqa: E402
 from ticketpilot.models import TicketInput  # noqa: E402
 from ticketpilot.pipeline import triage  # noqa: E402
@@ -119,6 +119,24 @@ def main(argv: list[str] | None = None) -> int:
     if settings.provider == "mock":
         print("TICKETPILOT_PROVIDER=mock — this script is for the real API. Aborting.")
         return 2
+
+    # Checked up front so an unfilled template produces a clear message rather
+    # than an authentication error that looks like a bad key. An empty value is
+    # called out separately from a missing one, because an empty
+    # ANTHROPIC_API_KEY still occupies its precedence slot and gets sent.
+    status = api_key_status()
+    if status != "present":
+        # ASCII only: this prints to a terminal, and the Windows console's default
+        # cp1252 encoding renders an em-dash as a replacement character.
+        detail = (
+            "ANTHROPIC_API_KEY is set but empty - the template line is still blank."
+            if status == "empty"
+            else "ANTHROPIC_API_KEY is not set."
+        )
+        print(f"{detail}\n\nAdd your key to the .env file in the project root:\n")
+        print("    ANTHROPIC_API_KEY=sk-ant-api03-...\n")
+        print("Then re-run this script. No other setup is needed.")
+        return 1
 
     ticket = (
         TicketInput(ticket_id=args.ticket_id, text=args.text, customer_tier="standard")
