@@ -51,6 +51,52 @@ from ticketpilot.storage import RunRecord, RunWriter  # noqa: E402
 # behaviours most likely to wobble between runs.
 STABILITY_TICKETS = ("T-001", "T-004", "T-005")
 
+# Opus 5 list pricing, USD per million tokens. Cache reads bill at roughly a tenth
+# of the input rate; cache writes at roughly 1.25x. Used to report what a run
+# actually cost rather than leaving an estimate in the report.
+_INPUT_PER_MTOK = 5.00
+_OUTPUT_PER_MTOK = 25.00
+_CACHE_WRITE_MULTIPLIER = 1.25
+_CACHE_READ_MULTIPLIER = 0.10
+
+
+def _collect_usage(diagnostics: dict[str, Any], into: dict[str, int]) -> int:
+    """Accumulate token usage from a case's diagnostics. Returns calls made.
+
+    Usage lives in different places per arm — the baseline records it flat, the
+    final pipeline records it per provider call including any repair — so this
+    walks both shapes rather than assuming one.
+    """
+    calls = 0
+    sources: list[dict[str, Any]] = []
+    if isinstance(diagnostics.get("usage"), dict):  # baseline
+        sources.append({"usage": diagnostics["usage"]})
+        calls = 1
+    for key in ("provider", "repair_provider"):  # final
+        entry = diagnostics.get(key)
+        if isinstance(entry, dict):
+            sources.append(entry)
+    if "provider_calls" in diagnostics:
+        calls = int(diagnostics["provider_calls"] or 0)
+
+    for source in sources:
+        usage = source.get("usage")
+        if isinstance(usage, dict):
+            for name, value in usage.items():
+                if isinstance(value, int):
+                    into[name] = into.get(name, 0) + value
+    return calls
+
+
+def _estimated_cost(usage: dict[str, int]) -> float:
+    """USD for the accumulated usage, at list price."""
+    return (
+        usage.get("input_tokens", 0) / 1e6 * _INPUT_PER_MTOK
+        + usage.get("cache_creation_input_tokens", 0) / 1e6 * _INPUT_PER_MTOK * _CACHE_WRITE_MULTIPLIER
+        + usage.get("cache_read_input_tokens", 0) / 1e6 * _INPUT_PER_MTOK * _CACHE_READ_MULTIPLIER
+        + usage.get("output_tokens", 0) / 1e6 * _OUTPUT_PER_MTOK
+    )
+
 
 # Defect scripts cycled through in --adversarial mode. Each is a specific way a
 # model can produce output that looks plausible and is wrong.
@@ -211,6 +257,8 @@ def run_mode(
     fingerprints: dict[str, list[str]] = defaultdict(list)
 
     adversarial_map = build_adversarial_map(cases) if adversarial else None
+    usage_total: dict[str, int] = {}
+    calls_total = 0
 
     for case in cases:
         repeats = runs if (runs > 1 and case.ticket.ticket_id in STABILITY_TICKETS) else 1
@@ -232,6 +280,8 @@ def run_mode(
                 diagnostics = {"crash": f"{type(exc).__name__}: {exc}"}
                 decision = None
                 print(f"  !! {case.case_id} crashed: {type(exc).__name__}: {exc}")
+
+            calls_total += _collect_usage(diagnostics, usage_total)
 
             writer.append(
                 RunRecord(
@@ -269,6 +319,13 @@ def run_mode(
         "authored_cases": aggregate(authored) if authored else None,
         "supplied_tickets": aggregate(supplied) if supplied else None,
         "tier_invariance": _tier_invariance(first_pass, cases),
+        # Recorded so the report can state what a run actually cost rather than
+        # extrapolating from a single call.
+        "cost": {
+            "provider_calls": calls_total,
+            "usage": dict(usage_total),
+            "estimated_usd_at_list_price": round(_estimated_cost(usage_total), 4),
+        },
     }
     if fingerprints:
         metrics["stability"] = stability_report(dict(fingerprints))

@@ -34,7 +34,13 @@ from .models import (
     TicketInput,
     TriageDecision,
 )
-from .prompts import build_repair_prompt, build_system_prompt, build_user_prompt, new_canary
+from .prompts import (
+    build_canary_block,
+    build_repair_prompt,
+    build_system_prompt,
+    build_user_prompt,
+    new_canary,
+)
 from .providers.base import LLMProvider
 from .review import DegradedPath, ReviewSignals, decide, flags_for_degraded_path, resolve_flags
 from .validation import clamp_unit_interval, contains_canary, validate_evidence, validate_kb_ids
@@ -130,14 +136,20 @@ def triage(
     if hasattr(provider, "canary"):  # let the scripted provider echo a real token
         provider.canary = canary  # type: ignore[attr-defined]
 
-    system = build_system_prompt(kb, canary, ticket.text)
+    # Split so the policy/KB block stays byte-stable and cacheable while the
+    # per-request canary sits after the cache breakpoint.
+    system = build_system_prompt(kb, ticket.text)
+    canary_block = build_canary_block(canary)
     messages: list[dict[str, str]] = [
         {"role": "user", "content": build_user_prompt(ticket)}
     ]
 
     # ---- First call --------------------------------------------------------
     result = provider.generate(
-        system=system, messages=messages, output_model=ModelTriageOutput
+        system=system,
+        messages=messages,
+        output_model=ModelTriageOutput,
+        system_suffix=canary_block,
     )
     diagnostics["provider_calls"] += 1
     diagnostics["provider"] = result.as_diagnostic()
@@ -177,7 +189,10 @@ def triage(
             {"role": "user", "content": build_repair_prompt(kb, errors)},
         ]
         repaired = provider.generate(
-            system=system, messages=repair_messages, output_model=ModelTriageOutput
+            system=system,
+            messages=repair_messages,
+            output_model=ModelTriageOutput,
+            system_suffix=canary_block,
         )
         diagnostics["provider_calls"] += 1
         diagnostics["repair_provider"] = repaired.as_diagnostic()

@@ -56,24 +56,33 @@ class AnthropicProvider:
         system: str,
         messages: list[dict[str, str]],
         output_model: type[BaseModel] | None = None,
+        system_suffix: str | None = None,
     ) -> ProviderResult:
         import anthropic
+
+        # Two system blocks, with the cache breakpoint on the first. The policy and
+        # knowledge base are byte-stable, so they cache; the per-request canary
+        # goes in a second, uncached block after the breakpoint.
+        #
+        # This split is load-bearing, not cosmetic. A prompt cache is a prefix
+        # match, so a per-call value inside the cached block changes the prefix
+        # every time. A measured 25-call run with the canary inside the cached
+        # block wrote 104,523 cache-creation tokens and read zero, costing 2.7x
+        # the baseline for fewer calls.
+        system_blocks: list[dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": system,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+        if system_suffix:
+            system_blocks.append({"type": "text", "text": system_suffix})
 
         request: dict[str, Any] = {
             "model": self._settings.model,
             "max_tokens": self._settings.max_tokens,
-            # A single cache breakpoint on the system block. The policy and
-            # knowledge base are byte-stable across requests, so repeated
-            # evaluation runs read the prefix from cache instead of re-paying for
-            # it. This is also why the canary goes last in the system prompt and
-            # why the KB is serialised deterministically.
-            "system": [
-                {
-                    "type": "text",
-                    "text": system,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
+            "system": system_blocks,
             "messages": messages,
             "thinking": {"type": "adaptive"},
             "output_config": {"effort": self._settings.effort},

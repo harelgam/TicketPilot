@@ -287,6 +287,72 @@ class TestCanaryFailsClosed:
         assert "TP-CANARY" not in outcome.decision.model_dump_json()
 
 
+class TestCanaryDoesNotDefeatPromptCaching:
+    """Regression tests for a real, measured cost bug.
+
+    The canary changes on every request. A prompt cache is a prefix match, so with
+    the canary inside the cached system block the prefix changed every call and the
+    cache never hit: a measured 25-call run wrote 104,523 cache-creation tokens and
+    read zero, costing 2.7x the baseline for fewer calls. The canary now lives in a
+    separate, uncached system block after the breakpoint.
+    """
+
+    def _system_texts(self, ticket: TicketInput) -> list[tuple[str, str]]:
+        captured: list[tuple[str, str]] = []
+
+        class Capturing(MockProvider):
+            def generate(self, *, system, messages, output_model=None, system_suffix=None):  # type: ignore[override]
+                captured.append((system, system_suffix or ""))
+                return super().generate(
+                    system=system,
+                    messages=messages,
+                    output_model=output_model,
+                    system_suffix=system_suffix,
+                )
+
+        _run(Capturing([Script.VALID]), ticket)
+        return captured
+
+    def test_canary_is_not_in_the_cacheable_block(self) -> None:
+        system, suffix = self._system_texts(BILLING_TICKET)[0]
+        assert "TP-CANARY" not in system, "canary leaked into the cached prefix"
+        assert "TP-CANARY" in suffix
+
+    def test_cacheable_block_is_byte_identical_across_tickets(self) -> None:
+        # If it were not, every ticket would write its own cache entry. Indexing
+        # rather than unpacking: a ticket whose evidence does not validate triggers
+        # a repair, so the capture list may hold two entries.
+        a = self._system_texts(BILLING_TICKET)[0][0]
+        b = self._system_texts(
+            TicketInput(ticket_id="OTHER", text="Please add dark mode.", customer_tier="enterprise")
+        )[0][0]
+        assert a == b
+
+    def test_canary_block_differs_per_request(self) -> None:
+        # The whole point of the canary: a token that cannot be learned across calls.
+        a = self._system_texts(BILLING_TICKET)[0][1]
+        b = self._system_texts(BILLING_TICKET)[0][1]
+        assert a != b
+
+    def test_repair_call_reuses_the_same_cacheable_block(self) -> None:
+        captured: list[str] = []
+
+        class Capturing(MockProvider):
+            def generate(self, *, system, messages, output_model=None, system_suffix=None):  # type: ignore[override]
+                captured.append(system)
+                return super().generate(
+                    system=system,
+                    messages=messages,
+                    output_model=output_model,
+                    system_suffix=system_suffix,
+                )
+
+        _run(Capturing([Script.MALFORMED_JSON, Script.VALID]))
+        assert len(captured) == 2
+        # The repair must hit the same cache entry, not write a second one.
+        assert captured[0] == captured[1]
+
+
 class TestInjectionHandling:
     INJECTION_TICKET = TicketInput(
         ticket_id="A-007",

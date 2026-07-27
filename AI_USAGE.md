@@ -126,6 +126,30 @@ act as" / "acts as" / "acting as" mid-sentence. The pattern is now anchored to a
 clause boundary, with politeness words allowed after it so "Please act as…" still
 matches. The offending string is a permanent regression case.
 
+**A cost bug the real evaluation exposed, which no test would have caught.**
+The final arm cost $0.80 against the baseline's $0.29 for *fewer* calls. Usage showed
+104,523 cache-creation tokens and **zero** cache reads: the per-request canary sat
+inside the cached system block, and a prompt cache is a prefix match, so every call
+wrote a fresh entry and none ever hit. Fixed by splitting the system prompt into a
+cached policy/KB block and an uncached canary block — keeping the canary in `system`
+rather than the user turn, so instruction separation survives. Verified against the
+real API: call 1 wrote 4,131 tokens and read 0; call 2 wrote 0 and read 4,131. Four
+regression tests now pin the cache placement. Worth recording because correctness
+tests pass either way — this was only visible in the usage numbers of a real run.
+
+**An expected label of mine was wrong, and the metric was rewarding the wrong
+behaviour.** The final version's only review-accuracy miss was `A-001`, where my
+expectation said `needs_human_review: false`. Investigating showed both arms flagged
+`MISSING_INFO`, the baseline paired that flag with `needs_human_review: false` — a
+self-contradictory decision — and my expectation agreed with the contradiction. So
+the final version was marked wrong for being self-consistent. `KB-AUTH-02`'s first
+step requires knowing whether the customer uses SSO or a local password, which the
+ticket never says, so `MISSING_INFO` is correct and review follows. I corrected the
+label, recorded the change and the previous values in `data/eval/cases.json` under
+`revised_after_live_run`, and reported **both** sets of numbers in the evaluation
+report — because editing an expectation after seeing a result is exactly the move
+that needs disclosing rather than quietly making.
+
 **Two defects a reviewer found that my tests did not cover.** Both are worth
 recording because they share a cause — I had tested behaviour thoroughly and left
 two *artifacts* of that behaviour unguarded:

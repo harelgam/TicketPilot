@@ -11,12 +11,17 @@ and enforced by code. A model failure or an injected instruction degrades the
 result into a reviewable abstention rather than an authoritative-looking
 fabrication.
 
-> **Evaluation status:** the real integration is **verified** — one live call, every
-> invariant held (`artifacts/live-verification.json`). Containment of hostile and
-> malformed model output is **measured** reproducibly at zero cost. The
-> baseline-to-final *accuracy* comparison is **not populated**, because the API
-> budget was one call. See [`evaluation_report.md`](evaluation_report.md), which
-> states plainly what was measured and what was not.
+> **Evaluation status: complete.** A full baseline-to-final comparison was run
+> against the real API — 20 cases × 2 arms plus 3×3 stability, 51 calls, $1.09.
+> Headline results: priority accuracy 85% → 100%, expected flags 73% → 100%,
+> stability 67% → 100%, and **tier invariance FAILED for the baseline** (identical
+> ticket text, P3 for `standard` and P2 for `platinum`) while the final version
+> passed.
+>
+> [`evaluation_report.md`](evaluation_report.md) also records what the run showed
+> *against* me: four safeguards were never exercised because the model did not
+> misbehave, one expected label of mine was wrong, and a canary-placement bug of
+> mine defeated prompt caching and made the final arm cost 2.7× the baseline.
 
 ---
 
@@ -88,14 +93,25 @@ invariant checks, token usage, and an upper-bound cost estimate.
 # Containment comparison, no API key, no cost:
 python run_eval.py --mode both --cases all --offline --adversarial
 
-# Full accuracy comparison against the real API (~46 calls, ~$0.40 measured):
+# Full accuracy comparison against the real API. The run reported in
+# evaluation_report.md made 51 calls and cost $1.09 at list price; a re-run should
+# be cheaper now that the prompt-cache bug is fixed.
 python run_eval.py --mode both --cases all --runs 3
+```
+
+### Re-score a saved run without spending anything
+
+Scoring is deterministic and `results.jsonl` holds every decision verbatim, so a
+corrected expected label does not need a fresh run:
+
+```bash
+python scripts/rescore.py artifacts/live-evaluation/*/results.jsonl --write
 ```
 
 ### Run the tests
 
 ```bash
-python -m pytest        # 309 tests, all offline
+python -m pytest        # 313 tests, all offline
 ```
 
 ### Regenerate the JSON schemas
@@ -117,8 +133,9 @@ cannot be forgotten silently.
 ticket ──> pre-checks         empty text short-circuits; injection regex scan
              │
              v
-        prompt builder        system = policy + KB + canary   (trusted)
-                              user   = <untrusted_ticket>…    (untrusted)
+        prompt builder        system[0] = policy + KB   (trusted, cached)
+                              system[1] = canary        (trusted, per-request)
+                              user      = <untrusted_ticket>…  (untrusted)
              │
              v
         LLMProvider           AnthropicProvider | MockProvider   (configurable)
@@ -239,11 +256,13 @@ timeout, would put a false statement in the response.
 
 ### How to read `confidence`
 
-The model's self-reported probability that the **category + priority pair** is
-correct given only the ticket text. It is explicitly **not** a calibrated
-probability and **not** a measure of grounding quality — a decision can be
-confident and ungrounded, which is why evidence and KB checks are separate. It is
-used solely as one review trigger among many.
+A **self-assessed score** from 0.0 to 1.0 for how certain the model is that the
+**category + priority pair** is correct given only the ticket text. The prompt asks
+for it in exactly those terms, so the request and this documentation agree: it is
+explicitly **not** a calibrated probability, and **not** a measure of grounding
+quality — a decision can be confident and ungrounded, which is why the evidence and
+KB checks are separate and independent of it. It is used solely as one review
+trigger among many.
 
 ---
 
@@ -318,10 +337,18 @@ Assembling from trusted content makes the failure impossible instead.
 
 Carried deliberately, not overlooked:
 
-- The accuracy and stability halves of the evaluation are unpopulated — the
-  harness is built and tested, and each is a single documented command
-  ([`evaluation_report.md`](evaluation_report.md) has both).
-- The confidence threshold is the documented default of 0.75 rather than a value
-  selected from data. It is configuration precisely so it can be set from evidence.
-- Whether one repair attempt suffices is a reasoned assumption that the evaluation
-  was meant to test, and has not.
+- **The confidence threshold is still the default 0.75, not a value chosen from
+  data.** The real run showed why: no case was reviewed *solely* because of the
+  confidence rule, so at 0.75 the threshold is currently inert — every review was
+  triggered by a flag, an escalated priority, or an UNKNOWN. Choosing it properly
+  needs cases where confidence is the deciding signal, which this set does not
+  contain. That is a gap in my case design, not in the harness.
+- **The repair path is barely exercised.** With schema-constrained output the real
+  run needed almost no repairs, so "one attempt is enough" remains largely untested
+  against real malformed output.
+- **Every percentage has a denominator of 20 or fewer**, and the stability finding
+  rests on 3 tickets × 3 runs. Indicative, not statistically meaningful.
+- **Four safeguards were never exercised by the real model** (`ticket_id`
+  protection, KB-ID allowlist, evidence check, action assembly all measured 0 → 0).
+  Their justification is tail protection plus the adversarial run, not the live
+  numbers.

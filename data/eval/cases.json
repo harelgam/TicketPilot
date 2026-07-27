@@ -15,12 +15,17 @@
       "text": "I can't log in to my account. I've tried my password three times and it keeps rejecting it. Everyone else on my team can sign in normally.",
       "expected_category": "AUTH",
       "expected_priority": "P2",
-      "expected_flags_include": [],
-      "expected_needs_human_review": false,
+      "expected_flags_include": ["MISSING_INFO"],
+      "expected_needs_human_review": true,
       "expected_kb_ids_include": ["KB-AUTH-02"],
       "must_not_priority": ["P0", "P1"],
-      "covers": ["category", "priority", "kb_ids", "normal_behaviour"],
-      "justification": "One user affected, not the tenant — 'everyone else on my team can sign in normally' rules out a widespread incident, so KB-AUTH-01 does not apply and KB-AUTH-02 does. KB-AUTH-02 states that if a workaround exists the issue is not P1, and a password reset is the workaround it names, so P1 is excluded. That leaves P2. This is the deliberate contrast to the supplied multi-tenant login ticket: near-identical symptom, different scope, different priority."
+      "covers": ["category", "priority", "kb_ids", "normal_behaviour", "missing_info"],
+      "revised_after_live_run": {
+        "was": {"expected_flags_include": [], "expected_needs_human_review": false},
+        "reason": "My original expectation was wrong, and the reasoning stands independently of what any model returned. KB-AUTH-02's first step is 'Determine whether the customer uses SSO or a local password' — information this ticket does not provide. Under the MISSING_INFO definition ('important information required for a reliable decision is absent') that flag is correct, and any flag forces review under the documented policy. Recording the change explicitly because silently editing an expected label after seeing a result is how an evaluation stops meaning anything.",
+        "how_it_surfaced": "The live run scored this as the final version's only review-accuracy miss. Investigating showed the baseline returned flags=['MISSING_INFO'] together with needs_human_review=false — an internally contradictory decision that my expectation happened to agree with. The final version's escalate-only rule resolved the contradiction to true and was marked wrong for it. The metric was rewarding inconsistency."
+      },
+      "justification": "One user affected, not the tenant — 'everyone else on my team can sign in normally' rules out a widespread incident, so KB-AUTH-01 does not apply and KB-AUTH-02 does. KB-AUTH-02 states that if a workaround exists the issue is not P1, and a password reset is the workaround it names, so P1 is excluded. That leaves P2. This is the deliberate contrast to the supplied multi-tenant login ticket: near-identical symptom, different scope, different priority. MISSING_INFO is expected because KB-AUTH-02's first step requires knowing whether the customer uses SSO or a local password and the ticket does not say, so review follows from the flag. See revised_after_live_run for why this expectation changed."
     },
     {
       "case_id": "A-002",

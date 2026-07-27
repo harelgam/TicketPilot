@@ -135,6 +135,7 @@ class MockProvider:
         system: str,
         messages: list[dict[str, str]],
         output_model: type[BaseModel] | None = None,
+        system_suffix: str | None = None,
     ) -> ProviderResult:
         script = self._next_script()
         self.call_count += 1
@@ -144,6 +145,7 @@ class MockProvider:
                 "structured": output_model is not None,
                 "message_count": len(messages),
                 "system_chars": len(system),
+                "has_system_suffix": bool(system_suffix),
             }
         )
 

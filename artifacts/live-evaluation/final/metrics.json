@@ -1,0 +1,118 @@
+{
+  "authored_cases": {
+    "cases": 14,
+    "category_accuracy_pct": 100.0,
+    "crashes": 0,
+    "evidence_quotes_total": 25,
+    "expected_flags_present_pct": 100.0,
+    "forbidden_priority_violations": 0,
+    "kb_ids_total": 16,
+    "priority_accuracy_pct": 100.0,
+    "prohibition_violations_lower_bound": 0,
+    "provider_failures": 0,
+    "review_accuracy_pct": 100.0,
+    "schema_validity_pct": 100.0,
+    "ticket_id_mismatches": 0,
+    "ungrounded_quotes_emitted": 0,
+    "unknown_kb_ids": 0,
+    "valid_evidence_quotes_pct": 100.0
+  },
+  "cost": {
+    "estimated_usd_at_list_price": 0.8002,
+    "provider_calls": 25,
+    "usage": {
+      "cache_creation_input_tokens": 104523,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 3298,
+      "output_tokens": 5218
+    }
+  },
+  "mode": "final",
+  "offline": false,
+  "overall": {
+    "cases": 20,
+    "category_accuracy_pct": 100.0,
+    "crashes": 0,
+    "evidence_quotes_total": 36,
+    "expected_flags_present_pct": 100.0,
+    "forbidden_priority_violations": 0,
+    "kb_ids_total": 22,
+    "priority_accuracy_pct": 100.0,
+    "prohibition_violations_lower_bound": 0,
+    "provider_failures": 0,
+    "review_accuracy_pct": 100.0,
+    "schema_validity_pct": 100.0,
+    "ticket_id_mismatches": 0,
+    "ungrounded_quotes_emitted": 0,
+    "unknown_kb_ids": 0,
+    "valid_evidence_quotes_pct": 100.0
+  },
+  "rescored_at": "2026-07-27T12:14:34.576187+00:00",
+  "rescored_from": "results.jsonl",
+  "rescored_note": "Metrics recomputed from stored decisions after an expected label was corrected. No new API calls were made; the decisions themselves are unchanged from the original run.",
+  "settings": {
+    "confidence_threshold": 0.75,
+    "effort": "low",
+    "model": "claude-opus-5",
+    "provider": "anthropic"
+  },
+  "stability": {
+    "fully_stable_tickets": 3,
+    "per_ticket": {
+      "T-001": {
+        "distinct_decisions": 1,
+        "runs": 3,
+        "stable": true
+      },
+      "T-004": {
+        "distinct_decisions": 1,
+        "runs": 3,
+        "stable": true
+      },
+      "T-005": {
+        "distinct_decisions": 1,
+        "runs": 3,
+        "stable": true
+      }
+    },
+    "stability_pct": 100.0,
+    "tickets": 3
+  },
+  "supplied_tickets": {
+    "cases": 6,
+    "category_accuracy_pct": 100.0,
+    "crashes": 0,
+    "evidence_quotes_total": 11,
+    "expected_flags_present_pct": 100.0,
+    "forbidden_priority_violations": 0,
+    "kb_ids_total": 6,
+    "priority_accuracy_pct": 100.0,
+    "prohibition_violations_lower_bound": 0,
+    "provider_failures": 0,
+    "review_accuracy_pct": 100.0,
+    "schema_validity_pct": 100.0,
+    "ticket_id_mismatches": 0,
+    "ungrounded_quotes_emitted": 0,
+    "unknown_kb_ids": 0,
+    "valid_evidence_quotes_pct": 100.0
+  },
+  "tier_invariance": {
+    "detail": [
+      {
+        "fingerprint_a": "{\"category\": \"DATA_EXPORT\", \"flags\": [], \"kb_ids\": [\"KB-EXPORT-01\"], \"needs_human_review\": false, \"priority\": \"P2\"}",
+        "fingerprint_b": "{\"category\": \"DATA_EXPORT\", \"flags\": [], \"kb_ids\": [\"KB-EXPORT-01\"], \"needs_human_review\": false, \"priority\": \"P2\"}",
+        "identical_decision_fields": true,
+        "pair": [
+          "A-013",
+          "A-014"
+        ]
+      }
+    ],
+    "pairs_checked": 1,
+    "pairs_invariant": 1
+  },
+  "verdict_changes": [
+    "A-001.review_correct: False -> True",
+    "A-001.expected_flags_present: False -> True"
+  ]
+}

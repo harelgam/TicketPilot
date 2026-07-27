@@ -83,12 +83,19 @@ class LLMProvider(Protocol):
         system: str,
         messages: list[dict[str, str]],
         output_model: type[BaseModel] | None = None,
+        system_suffix: str | None = None,
     ) -> ProviderResult:
         """Produce one response.
 
         ``messages`` is a list of ``{"role": ..., "content": ...}`` turns, so the
         repair call can pass the original exchange plus the correction request
         rather than re-deriving context.
+
+        ``system`` is the byte-stable, cacheable part of the trusted instructions.
+        ``system_suffix`` is per-request trusted content (the confidentiality
+        canary) that must sit *after* the cache breakpoint — a prompt cache is a
+        prefix match, so putting a per-call value inside the cached block changes
+        the prefix every time and the cache never hits.
 
         ``output_model`` requests schema-constrained output. Implementations must
         never raise for a provider-side failure: they return a
